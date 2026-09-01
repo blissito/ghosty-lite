@@ -3517,8 +3517,7 @@
       "type": "string",
       "enum": [
         "auto",
-        "json",
-        "nostr"
+        "json"
       ]
     },
     "ImportSessionResponse_unstable": {
@@ -3551,54 +3550,6 @@
       "description": "Import session response — metadata about the newly created session.",
       "x-side": "agent",
       "x-method": "_goose/unstable/session/import"
-    },
-    "ShareSessionNostrRequest_unstable": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        },
-        "relays": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "sessionId",
-        "relays"
-      ],
-      "x-side": "agent",
-      "x-method": "_goose/unstable/session/share/nostr"
-    },
-    "ShareSessionNostrResponse_unstable": {
-      "type": "object",
-      "properties": {
-        "deeplink": {
-          "type": "string"
-        },
-        "nevent": {
-          "type": "string"
-        },
-        "eventId": {
-          "type": "string"
-        },
-        "relays": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "deeplink",
-        "nevent",
-        "eventId",
-        "relays"
-      ],
-      "x-side": "agent",
-      "x-method": "_goose/unstable/session/share/nostr"
     },
     "EncodeRecipeRequest_unstable": {
       "type": "object",
@@ -6313,15 +6264,6 @@
                 {
                   "allOf": [
                     {
-                      "$ref": "#/$defs/ShareSessionNostrRequest_unstable"
-                    }
-                  ],
-                  "description": "Params for _goose/unstable/session/share/nostr",
-                  "title": "ShareSessionNostrRequest_unstable"
-                },
-                {
-                  "allOf": [
-                    {
                       "$ref": "#/$defs/EncodeRecipeRequest_unstable"
                     }
                   ],
@@ -6982,14 +6924,6 @@
                         }
                       ],
                       "title": "ImportSessionResponse_unstable"
-                    },
-                    {
-                      "allOf": [
-                        {
-                          "$ref": "#/$defs/ShareSessionNostrResponse_unstable"
-                        }
-                      ],
-                      "title": "ShareSessionNostrResponse_unstable"
                     },
                     {
                       "allOf": [

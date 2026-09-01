@@ -90,7 +90,6 @@ libc = { version = "0.2.182", default-features = false, features = ["std"] }
 default = ["rustls-tls"]
 code-mode = ["goose/code-mode"]
 aws-providers = ["goose/aws-providers"]
-nostr = ["goose/nostr"]
 otel = ["goose/otel"]
 system-keyring = ["goose/system-keyring"]
 update = ["dep:sigstore-verify", "dep:snap"]
