@@ -8,7 +8,7 @@ use goose::config::{Config, GooseMode};
 use goose::recipe::Recipe;
 use goose::source_roots::SourceRoot;
 use goose_mcp::mcp_server_runner::{serve, McpCommand};
-use goose_mcp::{AutoVisualiserRouter, ComputerControllerServer, MemoryServer, TutorialServer};
+use goose_mcp::{ComputerControllerServer, MemoryServer, TutorialServer};
 
 use crate::commands::configure::handle_configure;
 use crate::commands::info::handle_info;
@@ -1460,7 +1460,6 @@ async fn handle_mcp_command(server: McpCommand) -> Result<()> {
     let name = server.name();
     let _ = crate::logging::setup_logging(Some(&format!("mcp-{name}")));
     match server {
-        McpCommand::AutoVisualiser => serve(AutoVisualiserRouter::new()).await?,
         McpCommand::ComputerController => serve(ComputerControllerServer::new()).await?,
         McpCommand::Memory => serve(MemoryServer::new()).await?,
         McpCommand::Tutorial => serve(TutorialServer::new()).await?,

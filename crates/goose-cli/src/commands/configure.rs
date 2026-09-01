@@ -1106,11 +1106,6 @@ fn collect_headers() -> anyhow::Result<HashMap<String, String>> {
 fn configure_builtin_extension() -> anyhow::Result<()> {
     let extensions = vec![
         (
-            "autovisualiser",
-            "Auto Visualiser",
-            "Data visualisation and UI generation tools",
-        ),
-        (
             "computercontroller",
             "Computer Controller",
             "controls for webscraping, file caching, and automations",
