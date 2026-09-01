@@ -298,7 +298,7 @@ async fn load_extensions(
         eprintln!(
             "{}",
             style(format!(
-                "  Hint: once the session starts, ask goose to help debug the '{}' extension",
+                "  Pista: cuando arranque la sesión, pídele a Ghosty que te ayude a depurar la extensión '{}'",
                 label
             ))
             .dim()
@@ -359,7 +359,7 @@ async fn resolve_provider_and_model(
         .or_else(|| recipe_settings.and_then(|s| s.goose_provider.clone()))
         .or_else(|| configured_provider.clone())
         .unwrap_or_else(|| {
-            output::render_error("No provider configured. Run 'goose configure' first.");
+            output::render_error("No hay proveedor configurado. Corre 'ghosty configure' primero.");
             process::exit(1);
         });
 
@@ -454,7 +454,7 @@ async fn resolve_provider_and_model(
             }
         })
         .unwrap_or_else(|| {
-            output::render_error("No model configured. Run 'goose configure' first.");
+            output::render_error("No hay modelo configurado. Corre 'ghosty configure' primero.");
             process::exit(1);
         });
 
@@ -781,11 +781,15 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
                     && is_provider_unavailable_error(&e) =>
             {
                 let fallback_provider = config.get_ghosty_provider().unwrap_or_else(|_| {
-                    output::render_error("No provider configured. Run 'goose configure' first.");
+                    output::render_error(
+                        "No hay proveedor configurado. Corre 'ghosty configure' primero.",
+                    );
                     process::exit(1);
                 });
                 let fallback_model = config.get_ghosty_model().unwrap_or_else(|_| {
-                    output::render_error("No model configured. Run 'goose configure' first.");
+                    output::render_error(
+                        "No hay modelo configurado. Corre 'ghosty configure' primero.",
+                    );
                     process::exit(1);
                 });
                 eprintln!(

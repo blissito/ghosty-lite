@@ -2,6 +2,7 @@ mod builder;
 mod completion;
 pub mod editor;
 mod elicitation;
+pub mod ghost;
 mod input;
 mod output;
 mod paste;
@@ -618,7 +619,7 @@ impl CliSession {
             println!(
                 "\n  {} {}",
                 console::style("●").red(),
-                console::style(format!("session closed · {}", &self.session_id)).dim()
+                console::style(format!("sesión cerrada · {}", &self.session_id)).dim()
             );
         }
 
@@ -1055,9 +1056,9 @@ impl CliSession {
             Ok(p) => p,
             Err(e) => {
                 output::render_error(&format!(
-                    "Cannot switch to provider '{}': {}\n\
-                         Set credentials via `goose configure` or the appropriate environment variable.\n\
-                         Session continues with current provider '{}'.",
+                    "No se pudo cambiar al proveedor '{}': {}\n\
+                         Configura las credenciales con `ghosty configure` o con la variable de entorno correspondiente.\n\
+                         La sesión sigue con el proveedor actual '{}'.",
                     target_provider_name, e, current_provider_name
                 ));
                 return Ok(());
@@ -2299,7 +2300,7 @@ fn maybe_open_credits_top_up_url(
 
     if should_open && webbrowser::open(&url).is_err() {
         output::render_text(
-            "Could not open browser automatically. Visit the URL above.",
+            "No se pudo abrir el navegador. Visita la URL de arriba.",
             Some(Color::Yellow),
             true,
         );
@@ -2318,34 +2319,34 @@ fn prompt_tool_confirmation(security_prompt: &Option<String>) -> Result<Permissi
 
     let prompt = if let Some(security_message) = security_prompt {
         println!("\n{}", security_message);
-        "Do you allow this tool call?".to_string()
+        "¿Permites esta llamada a la herramienta?".to_string()
     } else {
-        "Goose would like to call the above tool, do you allow?".to_string()
+        "Ghosty quiere usar la herramienta de arriba, ¿lo permites?".to_string()
     };
 
     let permission_result = if security_prompt.is_none() {
         cliclack::select(prompt)
-            .item(Permission::AllowOnce, "Allow", "Allow the tool call once")
+            .item(Permission::AllowOnce, "Permitir", "Permitir esta vez")
             .item(
                 Permission::AlwaysAllow,
-                "Always Allow",
-                "Always allow the tool call",
+                "Siempre permitir",
+                "Permitir siempre esta herramienta",
             )
-            .item(Permission::DenyOnce, "Deny", "Deny the tool call")
+            .item(Permission::DenyOnce, "Denegar", "Denegar esta llamada")
             .item(
                 Permission::Cancel,
-                "Cancel",
-                "Cancel the AI response and tool call",
+                "Cancelar",
+                "Cancelar la respuesta y la llamada",
             )
             .interact()
     } else {
         cliclack::select(prompt)
-            .item(Permission::AllowOnce, "Allow", "Allow the tool call once")
-            .item(Permission::DenyOnce, "Deny", "Deny the tool call")
+            .item(Permission::AllowOnce, "Permitir", "Permitir esta vez")
+            .item(Permission::DenyOnce, "Denegar", "Denegar esta llamada")
             .item(
                 Permission::Cancel,
-                "Cancel",
-                "Cancel the AI response and tool call",
+                "Cancelar",
+                "Cancelar la respuesta y la llamada",
             )
             .interact()
     };
@@ -2756,7 +2757,7 @@ async fn get_reasoner(
         println!("WARNING: GHOSTY_PLANNER_PROVIDER not found. Using default provider...");
         config
             .get_ghosty_provider()
-            .expect("No provider configured. Run 'goose configure' first")
+            .expect("No hay proveedor configurado. Corre 'ghosty configure' primero")
     };
 
     // Try planner-specific model first, fall back to default model
@@ -2766,7 +2767,7 @@ async fn get_reasoner(
         println!("WARNING: GHOSTY_PLANNER_MODEL not found. Using default model...");
         config
             .get_ghosty_model()
-            .expect("No model configured. Run 'goose configure' first")
+            .expect("No hay modelo configurado. Corre 'ghosty configure' primero")
     };
 
     let planner_context_limit = match env::var(GHOSTY_PLANNER_CONTEXT_LIMIT)

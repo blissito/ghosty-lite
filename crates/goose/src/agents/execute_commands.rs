@@ -21,40 +21,40 @@ pub struct CommandDef {
 static COMMANDS: &[CommandDef] = &[
     CommandDef {
         name: "prompts",
-        description: "List available prompts, optionally filtered by extension",
+        description: "Listar los prompts disponibles, opcionalmente por extensión",
     },
     CommandDef {
         name: "prompt",
-        description: "Execute a prompt or show its info with --info",
+        description: "Ejecutar un prompt, o ver su información con --info",
     },
     CommandDef {
         name: "compact",
-        description: "Compact the conversation history",
+        description: "Compactar el historial de la conversación",
     },
     CommandDef {
         name: "clear",
-        description: "Clear the conversation history",
+        description: "Borrar el historial de la conversación",
     },
     CommandDef {
         name: "skills",
-        description: "List installed skills and other available sources",
+        description: "Listar las skills instaladas y otras fuentes disponibles",
     },
     CommandDef {
         name: "doctor",
-        description: "Check that your Goose setup is working",
+        description: "Comprobar que tu instalación de Ghosty funciona",
     },
     CommandDef {
         name: "goal",
-        description: "Set a goal the agent must satisfy before finishing, or clear with /goal off",
+        description: "Fijar una meta que el agente debe cumplir antes de terminar; se quita con /goal off",
     },
     CommandDef {
         name: "grind",
         description:
-            "Set a goal the agent pursues relentlessly until max_turns, or clear with /grind off",
+            "Fijar una meta que el agente persigue sin parar hasta max_turns; se quita con /grind off",
     },
     CommandDef {
         name: "status",
-        description: "Show session status: model, provider, mode, and token usage",
+        description: "Estado de la sesión: modelo, proveedor, modo y tokens",
     },
 ];
 

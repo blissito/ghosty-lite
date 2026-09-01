@@ -266,7 +266,7 @@ fn handle_slash_command(input: &str) -> Option<InputResult> {
                 Some(InputResult::SelectTheme(t))
             } else {
                 println!(
-                    "Theme Unavailable: {} Available themes are: light, dark, ansi",
+                    "Tema no disponible: {}. Los temas disponibles son: light, dark, ansi",
                     t
                 );
                 Some(InputResult::Retry)
@@ -351,7 +351,7 @@ fn handle_slash_command(input: &str) -> Option<InputResult> {
             }
         }
         s if s == CMD_SUMMARIZE_DEPRECATED => {
-            println!("{}", console::style("⚠️  Note: /summarize has been renamed to /compact and will be removed in a future release.").yellow());
+            println!("{}", console::style("⚠️  Aviso: /summarize ahora se llama /compact y se quitará en una versión futura.").yellow());
             Some(InputResult::Compact)
         }
         "/r" => Some(InputResult::ToggleFullToolOutput),
@@ -388,7 +388,7 @@ fn parse_recipe_command(s: &str) -> Option<InputResult> {
 
     // Validate that the filepath ends with .yaml
     if !filepath.to_lowercase().ends_with(".yaml") {
-        println!("{}", console::style("Filepath must end with .yaml").red());
+        println!("{}", console::style("La ruta debe terminar en .yaml").red());
         return Some(InputResult::Retry);
     }
 
@@ -468,40 +468,38 @@ fn help_text() -> String {
     };
 
     format!(
-        "Available commands:
-/exit or /quit - Exit the session
-/t - Toggle Light/Dark/Ansi theme
-/t <name> - Set theme directly (light, dark, ansi)
-/r - Toggle full tool output display (show complete tool parameters without truncation)
-/extension <command> - Add a stdio extension (format: ENV1=val1 command args...)
-/builtin <names> - Add builtin extensions by name (comma-separated)
-/prompts [--extension <name>] - List all available prompts, optionally filtered by extension
-/prompt <n> [--info] [key=value...] - Get prompt info or execute a prompt
-/mode <name> - Set the goose mode to use ({modes})
-/model [name] - Show the current model, or switch models for this session while keeping the same provider
-/model --provider <name> [model] - Switch to a different provider (optionally specifying a model)
-/plan <message_text> -  Enters 'plan' mode with optional message. Create a plan based on the current messages and asks user if they want to act on it.
-                        If user acts on the plan, goose mode is set to 'auto' and returns to 'normal' goose mode.
-                        To warm up goose before using '/plan', we recommend setting '/mode approve' & putting appropriate context into goose.
-                        The model is used based on $GHOSTY_PLANNER_PROVIDER and $GHOSTY_PLANNER_MODEL environment variables.
-                        If no model is set, the default model is used.
-/endplan - Exit plan mode and return to 'normal' goose mode.
-/recipe [filepath] - Generate a recipe from the current conversation and save it to the specified filepath (must end with .yaml).
-                       If no filepath is provided, it will be saved to ./recipe.yaml.
-/compact - Compact the current conversation to reduce context length while preserving key information.
-{additional_builtin_help}/status - Show session status: model, provider, mode, and token usage.
-/edit [text] - Open your prompt editor to compose a message. Optionally pre-fill with text.
-               Uses $GHOSTY_PROMPT_EDITOR, $VISUAL, or $EDITOR (in that order).
-/skills - List available skills or enable skills by name (usage: /skills [<name>...])
-/? or /help - Display this help message
-/clear - Clears the current chat history
-/new - Start a fresh session in this process, keeping the current provider, model and extensions
+        "Comandos disponibles:
+/exit o /quit - Salir de la sesión
+/t - Alternar tema claro / oscuro / ansi
+/t <nombre> - Fijar el tema (light, dark, ansi)
+/r - Mostrar la salida completa de las herramientas, sin recortar
+/extension <comando> - Agregar una extensión stdio (formato: ENV1=val1 comando args...)
+/builtin <nombres> - Agregar extensiones builtin por nombre (separadas por coma)
+/prompts [--extension <nombre>] - Listar los prompts disponibles, opcionalmente por extensión
+/prompt <n> [--info] [clave=valor...] - Ver o ejecutar un prompt
+/mode <nombre> - Cambiar el modo del agente ({modes})
+/model [nombre] - Ver el modelo actual, o cambiarlo para esta sesión con el mismo proveedor
+/model --provider <nombre> [modelo] - Cambiar de proveedor (y opcionalmente de modelo)
+/plan <mensaje> - Entrar en modo plan: arma un plan a partir de la conversación y pregunta si lo ejecuta.
+                  Si lo ejecuta, el modo pasa a 'auto' y al terminar vuelve al normal.
+                  El modelo sale de $GHOSTY_PLANNER_PROVIDER y $GHOSTY_PLANNER_MODEL; si no están, usa el actual.
+/endplan - Salir del modo plan
+/recipe [ruta] - Generar una receta a partir de la conversación y guardarla (debe terminar en .yaml).
+                 Sin ruta, se guarda en ./recipe.yaml.
+/compact - Compactar la conversación para liberar contexto conservando lo importante
+{additional_builtin_help}/status - Estado de la sesión: modelo, proveedor, modo y tokens
+/edit [texto] - Abrir tu editor para redactar un mensaje, opcionalmente con texto inicial.
+                Usa $GHOSTY_PROMPT_EDITOR, $VISUAL o $EDITOR, en ese orden.
+/skills - Listar las skills disponibles o activarlas por nombre (uso: /skills [<nombre>...])
+/? o /help - Esta ayuda
+/clear - Borrar el historial de la conversación
+/new - Empezar una sesión nueva en este proceso, con el mismo proveedor, modelo y extensiones
 
-Navigation:
-Enter - Send message
-Ctrl+{newline_key} - Add a newline (configurable via GHOSTY_CLI_NEWLINE_KEY)
-Ctrl+C - Clear current line if text is entered, otherwise exit the session
-Up/Down arrows - Navigate through command history"
+Navegación:
+Enter - Enviar el mensaje
+Ctrl+{newline_key} - Salto de línea (configurable con GHOSTY_CLI_NEWLINE_KEY)
+Ctrl+C - Borrar la línea si hay texto; si no, salir de la sesión
+Flechas arriba/abajo - Recorrer el historial"
     )
 }
 
@@ -535,14 +533,14 @@ pub(super) fn extract_recent_messages(conversation_messages: Option<&Vec<String>
 /// Print help information about editor input
 fn print_editor_help() {
     println!(
-        "Editor Input:
-  /edit opens your configured editor for composing prompts.
-  Use '/edit some text' to pre-fill the editor with initial text.
-  Previous conversation is included as markdown headings for context.
-  Configure editor: goose configure set goose_prompt_editor \"vim\"
-  Falls back to $VISUAL or $EDITOR if goose_prompt_editor is not set.
-  When goose_prompt_editor is set, the editor is used for every prompt by default.
-  To use inline prompts with on-demand /edit: goose configure set goose_prompt_editor_always false"
+        "Redactar en el editor:
+  /edit abre tu editor para escribir el mensaje.
+  Usa '/edit algún texto' para abrirlo con texto inicial.
+  La conversación previa se incluye como encabezados markdown, de contexto.
+  Configurar el editor: ghosty configure set ghosty_prompt_editor \"vim\"
+  Si ghosty_prompt_editor no está, se usa $VISUAL o $EDITOR.
+  Con ghosty_prompt_editor definido, el editor se abre para cada mensaje.
+  Para escribir en línea y usar /edit sólo a demanda: ghosty configure set ghosty_prompt_editor_always false"
     );
 }
 

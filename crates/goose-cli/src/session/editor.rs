@@ -90,7 +90,7 @@ pub fn edit_conversation(conversation: &Conversation) -> Result<Conversation> {
 
 /// Build the markdown template content for the editor prompt.
 fn build_template(messages: &[&str], prefill: Option<&str>) -> String {
-    let mut content = String::from("# Goose Prompt Editor\n\n");
+    let mut content = String::from("# Ghosty · redacta tu mensaje\n\n");
 
     content.push_str("# Your prompt:\n\n");
     if let Some(text) = prefill {
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_extract_user_input_with_editor_output() {
-        let content = r#"# Goose Prompt Editor
+        let content = r#"# Ghosty · redacta tu mensaje
 
 # Your prompt:
 This is the hardcoded prompt response
@@ -259,7 +259,7 @@ This is the hardcoded prompt response
 
     #[test]
     fn test_extract_user_input_conversation_history_heading() {
-        let content = r#"# Goose Prompt Editor
+        let content = r#"# Ghosty · redacta tu mensaje
 
 # Your prompt:
 This is the user's input
@@ -286,7 +286,7 @@ This is the user's input
         assert!(path.to_str().unwrap().ends_with(".md"));
 
         let content = fs::read_to_string(path).unwrap();
-        assert!(content.contains("# Goose Prompt Editor"));
+        assert!(content.contains("# Ghosty · redacta tu mensaje"));
         assert!(content.contains("## User: Hello"));
         assert!(content.contains("## Assistant: Hi there!"));
         assert!(content.contains("# Your prompt:"));
@@ -335,7 +335,7 @@ This is the user's input
 
     #[test]
     fn test_extract_user_input() {
-        let content = r#"# Goose Prompt Editor
+        let content = r#"# Ghosty · redacta tu mensaje
 
 # Recent conversation for context:
 
@@ -482,7 +482,10 @@ with multiple lines.
     #[test]
     fn test_build_template_no_prefill_no_messages() {
         let content = build_template(&[], None);
-        assert_eq!(content, "# Goose Prompt Editor\n\n# Your prompt:\n\n");
+        assert_eq!(
+            content,
+            "# Ghosty · redacta tu mensaje\n\n# Your prompt:\n\n"
+        );
     }
 
     #[test]
@@ -574,7 +577,7 @@ with multiple lines.
             script.path(),
             r#"printf '%s' "$4" > "$1"
 pwd > "$2"
-printf '# Goose Prompt Editor\n\n# Your prompt:\n\nupdated prompt\n' > "$4"
+printf '# Ghosty · redacta tu mensaje\n\n# Your prompt:\n\nupdated prompt\n' > "$4"
 ln -sf "$3" .goose_prompt_temp.md
 "#,
         )

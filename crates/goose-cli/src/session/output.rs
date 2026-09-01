@@ -135,40 +135,52 @@ pub fn get_show_full_tool_output() -> bool {
     SHOW_FULL_TOOL_OUTPUT.with(|s| *s.borrow())
 }
 
-// Simple wrapper around spinner to manage its state
+/// Indicador de "pensando": los ojos del fantasma parpadeando delante de la
+/// frase. Es un `indicatif::ProgressBar` porque `cliclack::spinner` no admite
+/// cuadros propios.
 #[derive(Default)]
 pub struct ThinkingIndicator {
-    spinner: Option<cliclack::ProgressBar>,
+    spinner: Option<ProgressBar>,
 }
 
 impl ThinkingIndicator {
     pub fn show(&mut self) {
-        let spinner = cliclack::spinner();
-        let hint = style("(Ctrl+C to interrupt)").dim();
-        if Config::global()
-            .get_param("RANDOM_THINKING_MESSAGES")
-            .unwrap_or(true)
-        {
-            spinner.start(format!(
-                "{}...  {}",
-                super::thinking::get_random_thinking_message(),
-                hint,
-            ));
-        } else {
-            spinner.start(format!("Thinking...  {}", hint));
-        }
+        let frames: Vec<String> = super::ghost::spinner_frames();
+        let frame_refs: Vec<&str> = frames.iter().map(String::as_str).collect();
+        let style_ = ProgressStyle::with_template("{spinner:.cyan} {msg}")
+            .expect("plantilla del spinner válida")
+            .tick_strings(&frame_refs);
+        let spinner = ProgressBar::new_spinner().with_style(style_);
+        spinner.set_message(thinking_message());
+        spinner.enable_steady_tick(Duration::from_millis(super::ghost::FRAME_MS));
         self.spinner = Some(spinner);
     }
 
     pub fn hide(&mut self) {
         if let Some(spinner) = self.spinner.take() {
-            spinner.stop("");
+            spinner.finish_and_clear();
         }
     }
 
     pub fn is_shown(&self) -> bool {
         self.spinner.is_some()
     }
+}
+
+fn thinking_hint() -> String {
+    style("(Ctrl+C para interrumpir)").dim().to_string()
+}
+
+fn thinking_message() -> String {
+    let phrase = if Config::global()
+        .get_param("RANDOM_THINKING_MESSAGES")
+        .unwrap_or(true)
+    {
+        super::thinking::get_random_thinking_message()
+    } else {
+        "Pensando"
+    };
+    format!("{phrase}...  {}", thinking_hint())
 }
 
 #[derive(Debug, Clone)]
@@ -232,7 +244,7 @@ pub fn set_thinking_message(s: &String) {
     if std::io::stdout().is_terminal() {
         THINKING.with(|t| {
             if let Some(spinner) = t.borrow_mut().spinner.as_mut() {
-                spinner.set_message(s);
+                spinner.set_message(s.to_string());
             }
         });
     }
@@ -1371,53 +1383,40 @@ pub fn display_session_info(
     set_terminal_title();
 
     let status = if resume {
-        "resuming"
+        "retomando"
     } else if session_id.is_none() {
-        "ephemeral"
+        "efímera"
     } else {
-        "new session"
+        "nueva sesión"
     };
-
-    let model_display = model.to_string();
-
     let cwd_display = std::env::current_dir()
         .ok()
         .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+        .unwrap_or_else(|| "desconocido".to_string());
 
-    // ASCII art goose with session info on the right
-    println!();
-    println!(
-        "  {}  {} {} {} {} {}",
-        style("  __( O)>").white(),
-        style("●").green(),
-        style(status).dim(),
-        style("·").dim(),
-        style(provider).dim(),
-        style(&model_display).cyan(),
-    );
-
-    if let Some(id) = session_id {
-        println!(
-            "  {}  {} {} {}",
-            style(r" \____)").white(),
-            style(" ").dim(),
-            style(id).dim(),
-            style(format!("· {}", cwd_display)).dim(),
-        );
-    } else {
-        println!(
-            "  {}  {} {}",
-            style(r" \____)").white(),
-            style(" ").dim(),
-            style(format!("  {}", cwd_display)).dim(),
-        );
-    }
-    println!(
-        "  {}  {}",
-        style("   L L").white(),
-        style("   goose is ready").white()
-    );
+    let info = vec![
+        format!(
+            "{} {} {} {} {}",
+            style("●").green(),
+            style(status).dim(),
+            style("·").dim(),
+            style(provider).dim(),
+            style(model).cyan()
+        ),
+        match session_id {
+            Some(id) => format!(
+                "{} {}",
+                style(id).dim(),
+                style(format!("· {cwd_display}")).dim()
+            ),
+            None => style(&cwd_display).dim().to_string(),
+        },
+        style("ghosty está listo").white().to_string(),
+        String::new(),
+    ];
+    // ~1.3 s de parpadeo: lo justo para que se note que está vivo, no para
+    // estorbar. Sin TTY se imprime un cuadro y ya.
+    super::ghost::print_animated(&info, 1300, |row| style(row).cyan().to_string());
 }
 
 fn set_terminal_title() {
@@ -1449,7 +1448,7 @@ pub fn display_context_usage(total_tokens: usize, context_limit: usize) {
     if context_limit == 0 {
         println!(
             "  {}",
-            style("context usage unavailable (context limit is 0)").dim()
+            style("uso de contexto no disponible (el límite de contexto es 0)").dim()
         );
         return;
     }
@@ -1650,8 +1649,8 @@ mod tests {
     #[test]
     fn terminal_line_sanitizer_preserves_plain_unicode_text() {
         assert_eq!(
-            sanitize_terminal_line("goose 👻\t日本語"),
-            "goose 👻\t日本語"
+            sanitize_terminal_line("ghosty 👻\t日本語"),
+            "ghosty 👻\t日本語"
         );
     }
 
@@ -1673,6 +1672,31 @@ mod tests {
             format_subagent_tool_call_message("subagent_42", "calendar__events__list"),
             "[subagent:42] events__list | calendar"
         );
+    }
+
+    #[test]
+    fn ghost_rows_keep_their_shape_across_time() {
+        for t in [0u64, 1, 7, 16, 17, 42, 99, 250, 999] {
+            let rows = super::super::ghost::rows(t);
+            assert_eq!(rows.len(), 4, "tick {t}");
+            for row in &rows {
+                assert_eq!(
+                    row.chars().count(),
+                    super::super::ghost::WIDTH,
+                    "tick {t}: {row:?}"
+                );
+            }
+            assert_eq!(rows[1], super::super::ghost::TOP);
+            assert_eq!(rows[3], super::super::ghost::BOTTOM);
+        }
+        assert_eq!(super::super::ghost::eye(0), "◐");
+    }
+
+    #[test]
+    fn session_info_does_not_panic_without_tty() {
+        // Bajo `cargo test` stdout no es una terminal: se imprime un solo cuadro.
+        display_session_info(false, "anthropic", "claude", &Some("abc123".into()));
+        display_session_info(true, "openai", "gpt", &None);
     }
 
     #[test]
