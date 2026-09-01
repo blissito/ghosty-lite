@@ -1719,7 +1719,7 @@ pub fn create_request_for_model_with_options(
 ) -> anyhow::Result<Value, Error> {
     if model_config.model_name.starts_with("o1-mini") {
         return Err(anyhow!(
-            "o1-mini model is not currently supported since goose uses tool calling and o1-mini does not support it. Please use o1 or o3 models instead."
+            "o1-mini model is not currently supported since ghosty uses tool calling and o1-mini does not support it. Please use o1 or o3 models instead."
         ));
     }
 
@@ -1875,7 +1875,7 @@ pub fn is_xai_reasoning_model(model_name: &str) -> bool {
         || model_name.starts_with("grok-4-1-fast-reasoning")
 }
 
-/// Maps Goose's effort levels to values accepted by xAI Chat Completions.
+/// Maps Ghosty's effort levels to values accepted by xAI Chat Completions.
 pub fn xai_reasoning_effort_for_thinking(
     model_name: &str,
     effort: ThinkingEffort,

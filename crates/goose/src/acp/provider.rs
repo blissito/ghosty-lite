@@ -852,7 +852,7 @@ impl Provider for AcpProvider {
             None
         };
         if claim.include_context && memo.is_none() {
-            // Nothing fit beside this turn's prompt, so the context never left goose. Give
+            // Nothing fit beside this turn's prompt, so the context never left ghosty. Give
             // it back rather than marking a handoff that never happened as done — a single
             // oversized turn would otherwise cost the session its whole history.
             handoff_claim_guard.rollback();
@@ -951,7 +951,7 @@ impl Provider for AcpProvider {
                                 params = params.with_arguments(map);
                             }
                             // external_dispatch tells the agent loop not to redispatch this
-                            // call. goose.acp.kind preserves ACP's stable categorization for
+                            // call. ghosty.acp.kind preserves ACP's stable categorization for
                             // downstream consumers (metrics, observability, icon selection)
                             // independent of the display title we put in `name`.
                             let tool_meta = Some(serde_json::json!({
@@ -1306,7 +1306,7 @@ impl AcpClientLoop {
                                     // `title` (display) and `kind` (category). We pass `title`
                                     // for renderer affordance, surface `kind` separately via
                                     // tool_meta for stable categorization, and the
-                                    // goose.external_dispatch marker keeps `name` off the
+                                    // ghosty.external_dispatch marker keeps `name` off the
                                     // agent loop's routing/auth paths.
                                     let _ = tx.try_send(AcpUpdate::ToolCallStart {
                                         id: id.clone(),
@@ -2030,7 +2030,7 @@ fn acp_text_update_message(text: TextContent, id: String, created: i64) -> Messa
         .with_id(id)
 }
 
-/// Convert ACP `ToolCallContent` blocks into the rmcp `Content` shape goose's
+/// Convert ACP `ToolCallContent` blocks into the rmcp `Content` shape ghosty's
 /// `Message::with_tool_response` consumes. Handles `Content` (text/image/other),
 /// `Diff`, and `Terminal` variants; falls back to a JSON serialization of
 /// `raw_output` when no blocks are present so the renderer always has something.
@@ -2258,8 +2258,8 @@ fn replace_effort_state(
     previous
 }
 
-/// Map a goose effort value onto the agent's advertised vocabulary. Values goose
-/// and the agent share pass through; goose's own enum values map onto their
+/// Map a ghosty effort value onto the agent's advertised vocabulary. Values ghosty
+/// and the agent share pass through; ghosty's own enum values map onto their
 /// closest agent equivalent. Anything else yields `None` so we never send a
 /// value the agent would reject.
 pub(super) fn map_effort_value(
@@ -2311,7 +2311,7 @@ pub(super) fn resolve_effort_value(
 /// Separate a value the agent evaluated and refused from an operational failure.
 /// Only an agent that actually processed the request answers with the JSON-RPC
 /// `invalid_params` code; the client library synthesizes `internal_error` for a
-/// dead subprocess or dropped connection, and goose's own send failures carry no
+/// dead subprocess or dropped connection, and ghosty's own send failures carry no
 /// ACP error at all.
 fn effort_option_error(value: &str, error: anyhow::Error) -> ProviderError {
     match error.downcast_ref::<agent_client_protocol::Error>() {
@@ -2559,7 +2559,7 @@ mod tests {
         assert_eq!(blocks.len(), 2);
         let memo = prompt_text(&blocks[0]);
         assert!(memo.starts_with(
-            "Conversation context from goose before this ACP provider session was created:"
+            "Conversation context from ghosty before this ACP provider session was created:"
         ));
         assert!(memo.contains("[user]: inspect src/lib.rs"));
         assert!(memo.contains("[assistant]: I found the file"));
@@ -3246,7 +3246,7 @@ mod tests {
 
         assert!(
             provider.claim_handoff_context(&messages).include_context,
-            "context that never left goose must still be handed off later"
+            "context that never left ghosty must still be handed off later"
         );
     }
 
@@ -3846,7 +3846,7 @@ mod tests {
 
     /// A refresh that reverts the agent's own effort (e.g. a model switch
     /// rebuilding per-model levels) must not be masked by a stale record of
-    /// what goose last sent: the persisted value gets re-applied.
+    /// what ghosty last sent: the persisted value gets re-applied.
     #[tokio::test]
     async fn apply_effort_if_changed_resends_after_the_agent_resets_its_effort() {
         let (tx, mut rx) = mpsc::channel(1);
@@ -4652,7 +4652,7 @@ mod tests {
             assert_eq!(
                 tool_meta["goose.acp.kind"],
                 serde_json::Value::String(expected.to_string()),
-                "goose.acp.kind serialized wrong for kind={kind:?}"
+                "ghosty.acp.kind serialized wrong for kind={kind:?}"
             );
         }
     }

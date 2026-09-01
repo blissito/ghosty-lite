@@ -16,7 +16,7 @@ impl Paths {
             }
         } else {
             // Sin GHOSTY_PATH_ROOT, todo vive en ~/.ghosty-lite. A propósito NO es
-            // ~/.ghosty (la home de ghostycode) ni la ruta de etcetera de goose:
+            // ~/.ghosty (la home de ghostycode) ni la ruta de etcetera de ghosty:
             // los tres productos conviven en la misma máquina sin pisarse.
             let base = Self::default_home();
             match dir_type {

@@ -85,7 +85,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 const DEFAULT_MAX_TURNS: u32 = 1000;
 const DEFAULT_STOP_HOOK_BLOCK_CAP: u32 = 8;
-const COMPACTION_PROGRESS_TEXT: &str = "goose is compacting the conversation...";
+const COMPACTION_PROGRESS_TEXT: &str = "ghosty is compacting the conversation...";
 const MAX_EMPTY_TURN_RETRIES: u32 = 3;
 const EMPTY_TURN_MESSAGE: &str =
     "The model returned an empty response. Please resend your message to continue.";
@@ -286,7 +286,7 @@ fn resolve_use_login_shell_path(explicit: Option<bool>, platform: &GoosePlatform
     explicit.unwrap_or(matches!(platform, GoosePlatform::GooseDesktop))
 }
 
-/// The main goose Agent
+/// The main ghosty Agent
 pub struct Agent {
     pub(super) provider: SharedProvider,
     pub config: AgentConfig,
@@ -4059,7 +4059,7 @@ impl Agent {
         let config = Config::global();
         let provider_name: String = config
             .get_ghosty_provider()
-            .expect("No provider configured. Run 'goose configure' first");
+            .expect("No provider configured. Run 'ghosty configure' first");
 
         let settings = Settings {
             goose_provider: Some(provider_name.clone()),

@@ -30,7 +30,6 @@ use super::{
     pi_acp::PiAcpProvider,
     provider_registry::ProviderRegistry,
     snowflake_def::SnowflakeProviderDef,
-    tetrate::TetrateProvider,
     xai::XaiProvider,
     xai_oauth::XaiOAuthProvider,
 };
@@ -169,8 +168,6 @@ async fn init_registry() -> RwLock<ProviderRegistry> {
         #[cfg(feature = "aws-providers")]
         registry.register::<SageMakerTgiProvider>(false);
         registry.register::<SnowflakeProviderDef>(false);
-        registry
-            .register_with_inventory::<TetrateProvider>(true, Some(registrations::refresh_only()));
         registry.register_with_inventory::<XaiProvider>(false, Some(registrations::refresh_only()));
         registry.register_with_inventory::<XaiOAuthProvider>(
             true,
@@ -537,7 +534,6 @@ mod tests {
             "github_copilot",
             "kimi_code",
             "nano-gpt",
-            "tetrate",
             "xai",
             "xai_oauth",
         ] {

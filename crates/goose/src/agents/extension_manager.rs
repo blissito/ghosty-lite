@@ -191,7 +191,7 @@ pub struct GooseMcpAppToolAttachment {
 
 pub(crate) const TRUSTED_TOOL_UPDATE_META_KEY: &str = "__goose_tool_update_meta";
 
-/// Manages goose extensions / MCP clients and their interactions
+/// Manages ghosty extensions / MCP clients and their interactions
 pub struct ExtensionManager {
     extensions: Mutex<HashMap<String, Extension>>,
     context: PlatformExtensionContext,
@@ -299,7 +299,7 @@ pub(crate) fn recover_mangled_tool_name<'a>(
 
     let mut matched: Option<&str> = None;
     for (name, owner) in tools {
-        // Prefixed tools: the model turns Goose's "__" separator into a dot
+        // Prefixed tools: the model turns Ghosty's "__" separator into a dot
         // ("developer__shell" -> "developer.shell").
         let separator_mangled = name
             .split_once("__")
@@ -759,7 +759,7 @@ pub(crate) fn substitute_env_vars(value: &str, env_map: &HashMap<String, String>
 }
 
 const GHOSTY_USER_AGENT: reqwest::header::HeaderValue =
-    reqwest::header::HeaderValue::from_static(concat!("goose/", env!("CARGO_PKG_VERSION")));
+    reqwest::header::HeaderValue::from_static(concat!("ghosty-lite/", env!("CARGO_PKG_VERSION")));
 
 #[allow(clippy::too_many_arguments)]
 async fn connect_with_auth(

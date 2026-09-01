@@ -27,7 +27,7 @@ static LOGGER_PROVIDER: Mutex<Option<SdkLoggerProvider>> = Mutex::new(None);
 static GRPC_PROTOCOL_WARNING_EMITTED: std::sync::Once = std::sync::Once::new();
 
 /// One-shot stderr warning when `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` is set
-/// in an environment where goose was built without the `grpc-tonic`
+/// in an environment where ghosty was built without the `grpc-tonic`
 /// transport feature. Using `tracing::warn!` here would race the OTel
 /// subscriber that is being initialized; eprintln keeps it visible
 /// regardless of subscriber state.
@@ -194,7 +194,7 @@ impl ExporterType {
 /// shared `OTEL_EXPORTER_OTLP_PROTOCOL`, and the default is `http/protobuf`
 /// (matching what `.with_http()` produces in this build).
 ///
-/// goose's `opentelemetry-otlp` build only enables the `http-proto` /
+/// ghosty's `opentelemetry-otlp` build only enables the `http-proto` /
 /// `reqwest-blocking-client` transport features — not `grpc-tonic`. If the caller's
 /// environment sets `…_PROTOCOL=grpc`, the `.with_http()` exporter still
 /// builds successfully but its background batch / metric reader threads
@@ -212,7 +212,7 @@ fn signal_protocol_is_http(signal: &str) -> bool {
     match raw.trim().to_lowercase().as_str() {
         // Default per spec when unset — matches `.with_http()`.
         "" | "http/protobuf" | "http/json" => true,
-        // gRPC variants require the `grpc-tonic` feature, which goose
+        // gRPC variants require the `grpc-tonic` feature, which ghosty
         // does not enable.
         _ => false,
     }
@@ -257,7 +257,7 @@ pub fn signal_exporter(signal: &str) -> Option<ExporterType> {
     }
 }
 
-/// Promotes goose config-file OTel settings to env vars before exporter build.
+/// Promotes ghosty config-file OTel settings to env vars before exporter build.
 pub fn promote_config_to_env(config: &crate::config::Config) {
     if env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_err() {
         if let Ok(endpoint) = config.get_param::<String>("otel_exporter_otlp_endpoint") {
@@ -276,7 +276,7 @@ fn create_resource() -> Resource {
 
     let mut builder = Resource::builder_empty()
         .with_attributes([
-            KeyValue::new("service.name", "goose"),
+            KeyValue::new("service.name", "ghosty-lite"),
             KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
             KeyValue::new("service.namespace", "goose"),
             KeyValue::new("host.name", session_host()),
@@ -331,7 +331,7 @@ fn create_otlp_tracing_layer() -> OtlpResult<OtlpTracingLayer> {
         ExporterType::Otlp => {
             if !signal_protocol_is_http("traces") {
                 warn_grpc_protocol_skipped_once();
-                return Err("OTLP traces protocol is grpc but goose was built without grpc-tonic; skipping traces exporter".into());
+                return Err("OTLP traces protocol is grpc but ghosty was built without grpc-tonic; skipping traces exporter".into());
             }
             let rt = get_or_create_otel_rt()?;
             let exporter = TokioSpanExporter {
@@ -383,7 +383,7 @@ fn create_otlp_metrics_layer() -> OtlpResult<OtlpMetricsLayer> {
         ExporterType::Otlp => {
             if !signal_protocol_is_http("metrics") {
                 warn_grpc_protocol_skipped_once();
-                return Err("OTLP metrics protocol is grpc but goose was built without grpc-tonic; skipping metrics exporter".into());
+                return Err("OTLP metrics protocol is grpc but ghosty was built without grpc-tonic; skipping metrics exporter".into());
             }
             let rt = get_or_create_otel_rt()?;
             let exporter = TokioMetricExporter {
@@ -422,7 +422,7 @@ fn create_otlp_logs_layer() -> OtlpResult<OtlpLogsLayer> {
         ExporterType::Otlp => {
             if !signal_protocol_is_http("logs") {
                 warn_grpc_protocol_skipped_once();
-                return Err("OTLP logs protocol is grpc but goose was built without grpc-tonic; skipping logs exporter".into());
+                return Err("OTLP logs protocol is grpc but ghosty was built without grpc-tonic; skipping logs exporter".into());
             }
             let rt = get_or_create_otel_rt()?;
             let exporter = TokioLogExporter {
@@ -935,15 +935,15 @@ mod tests {
     #[test_case(
         &[],
         Resource::builder_empty()
-            .with_attributes([KeyValue::new("service.name", "goose"), KeyValue::new("service.version", env!("CARGO_PKG_VERSION")), KeyValue::new("service.namespace", "goose"), KeyValue::new("host.name", session_host()), KeyValue::new("user.name", session_user())])
+            .with_attributes([KeyValue::new("service.name", "ghosty-lite"), KeyValue::new("service.version", env!("CARGO_PKG_VERSION")), KeyValue::new("service.namespace", "goose"), KeyValue::new("host.name", session_host()), KeyValue::new("user.name", session_user())])
             .with_detector(Box::new(TelemetryResourceDetector))
             .build();
-        "no env vars uses goose defaults"
+        "no env vars uses ghosty defaults"
     )]
     #[test_case(
         &[("OTEL_SERVICE_NAME", "custom")],
         Resource::builder_empty()
-            .with_attributes([KeyValue::new("service.name", "goose"), KeyValue::new("service.version", env!("CARGO_PKG_VERSION")), KeyValue::new("service.namespace", "goose"), KeyValue::new("host.name", session_host()), KeyValue::new("user.name", session_user())])
+            .with_attributes([KeyValue::new("service.name", "ghosty-lite"), KeyValue::new("service.version", env!("CARGO_PKG_VERSION")), KeyValue::new("service.namespace", "goose"), KeyValue::new("host.name", session_host()), KeyValue::new("user.name", session_user())])
             .with_detector(Box::new(TelemetryResourceDetector))
             .with_service_name("custom")
             .build();
@@ -952,7 +952,7 @@ mod tests {
     #[test_case(
         &[("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=prod")],
         Resource::builder_empty()
-            .with_attributes([KeyValue::new("service.name", "goose"), KeyValue::new("service.version", env!("CARGO_PKG_VERSION")), KeyValue::new("service.namespace", "goose"), KeyValue::new("host.name", session_host()), KeyValue::new("user.name", session_user())])
+            .with_attributes([KeyValue::new("service.name", "ghosty-lite"), KeyValue::new("service.version", env!("CARGO_PKG_VERSION")), KeyValue::new("service.namespace", "goose"), KeyValue::new("host.name", session_host()), KeyValue::new("user.name", session_user())])
             .with_detector(Box::new(TelemetryResourceDetector))
             .with_attribute(KeyValue::new("deployment.environment", "prod"))
             .build();
@@ -961,7 +961,7 @@ mod tests {
     #[test_case(
         &[("OTEL_SERVICE_NAME", "custom"), ("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=prod")],
         Resource::builder_empty()
-            .with_attributes([KeyValue::new("service.name", "goose"), KeyValue::new("service.version", env!("CARGO_PKG_VERSION")), KeyValue::new("service.namespace", "goose"), KeyValue::new("host.name", session_host()), KeyValue::new("user.name", session_user())])
+            .with_attributes([KeyValue::new("service.name", "ghosty-lite"), KeyValue::new("service.version", env!("CARGO_PKG_VERSION")), KeyValue::new("service.namespace", "goose"), KeyValue::new("host.name", session_host()), KeyValue::new("user.name", session_user())])
             .with_detector(Box::new(TelemetryResourceDetector))
             .with_service_name("custom")
             .with_attribute(KeyValue::new("deployment.environment", "prod"))

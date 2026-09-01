@@ -308,7 +308,7 @@ pub async fn handle_info(verbose: bool, check: bool) -> Result<()> {
         }
 
         // Propagate non-zero exit status so automation (CI scripts, install
-        // checks, health probes) can rely on `goose info --check` as a
+        // checks, health probes) can rely on `ghosty info --check` as a
         // pre-flight verifier.
         if result.is_err() {
             return Err(anyhow!("la prueba del proveedor falló"));

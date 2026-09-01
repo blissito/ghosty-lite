@@ -19,7 +19,7 @@ use crate::acp::server::GooseAgentConnection;
 use crate::acp::server_factory::AcpServer;
 
 // The upstream ACP HTTP server only supports exact origin allowlists for
-// WebSocket upgrades; Goose applies its richer loopback predicate before this.
+// WebSocket upgrades; Ghosty applies its richer loopback predicate before this.
 const UPSTREAM_WS_ALLOWED_ORIGIN: &str = "http://goose.local";
 const OPAQUE_ORIGIN: &str = "null";
 const FILE_ORIGIN: &str = "file://";
@@ -172,7 +172,7 @@ fn acp_cors_layer(policy: AcpOriginPolicy) -> CorsLayer {
 }
 
 /// CORS for the auxiliary routes (`/health`, `/status`, MCP app proxy) served by
-/// `goose serve`. This allows the `x-secret-key` auth header the proxy routes
+/// `ghosty serve`. This allows the `x-secret-key` auth header the proxy routes
 /// rely on.
 fn aux_cors_layer() -> CorsLayer {
     CorsLayer::new()
@@ -220,7 +220,7 @@ async fn health() -> &'static str {
     "ok"
 }
 
-/// The full standalone ACP server router used by `goose serve`: ACP transport,
+/// The full standalone ACP server router used by `ghosty serve`: ACP transport,
 /// optional token auth, health/status endpoints, and the MCP app proxy.
 pub fn create_router(
     server: Arc<AcpServer>,

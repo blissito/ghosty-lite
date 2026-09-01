@@ -815,7 +815,7 @@ mod tests {
                 id.to_string(),
                 tool_call.name.to_string().clone(),
                 tool_call.arguments.unwrap_or_default().clone(),
-                Some("goose would like to call the above tool. Allow? (y/n):".to_string()),
+                Some("ghosty would like to call the above tool. Allow? (y/n):".to_string()),
             )],
         )
     }
@@ -868,7 +868,7 @@ mod tests {
 
     #[test]
     fn test_get_usage_includes_thinking_tokens() {
-        // Gemini thinking models (2.5/3, the goose defaults) report reasoning
+        // Gemini thinking models (2.5/3, the ghosty defaults) report reasoning
         // tokens separately in `thoughtsTokenCount`, and per the API spec
         // `totalTokenCount` = prompt + thoughts + candidates. `output_tokens`
         // must include thoughts so the record reconciles (input + output ==

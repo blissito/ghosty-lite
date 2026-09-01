@@ -298,7 +298,7 @@ fn execution_timeout() -> Duration {
 /// bound the wait with the extension timeout and honor cancellation.
 ///
 /// `dispatch_token` is the child token shared with the callback dispatches that
-/// a script makes back into Goose tools. When execution is abandoned (timeout
+/// a script makes back into Ghosty tools. When execution is abandoned (timeout
 /// or cancellation), the token is cancelled so an in-flight nested tool call
 /// (e.g. a long `developer.shell` command) is told to stop instead of running
 /// on in the background.

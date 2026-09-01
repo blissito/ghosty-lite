@@ -194,7 +194,7 @@ pub enum ExtensionConfig {
         #[serde(skip_serializing_if = "Vec::is_empty")]
         available_tools: Vec<String>,
     },
-    /// Built-in extension that is part of the bundled goose MCP server
+    /// Built-in extension that is part of the bundled ghosty MCP server
     #[serde(rename = "builtin")]
     Builtin {
         /// The name used to identify this extension

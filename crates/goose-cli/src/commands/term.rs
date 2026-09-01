@@ -39,7 +39,7 @@ impl Shell {
 
 static BASH_CONFIG: ShellConfig = ShellConfig {
     script_template: r#"export AGENT_SESSION_ID="{session_id}"
-alias @goose='{goose_bin} term run'
+alias @ghosty='{goose_bin} term run'
 alias @g='{goose_bin} term run'
 
 goose_preexec() {
@@ -56,7 +56,7 @@ fi{command_not_found_handler}"#,
         r#"
 
 command_not_found_handle() {
-    echo "👻 Command '$1' not found. Asking goose..."
+    echo "👻 Command '$1' not found. Asking ghosty..."
     '{goose_bin}' term run "$@"
     return 0
 }"#,
@@ -65,7 +65,7 @@ command_not_found_handle() {
 
 static ZSH_CONFIG: ShellConfig = ShellConfig {
     script_template: r#"export AGENT_SESSION_ID="{session_id}"
-alias @goose='{goose_bin} term run'
+alias @ghosty='{goose_bin} term run'
 alias @g='{goose_bin} term run'
 
 goose_preexec() {
@@ -80,7 +80,7 @@ add-zsh-hook preexec goose_preexec{command_not_found_handler}"#,
         r#"
 
 command_not_found_handler() {
-    echo "👻 Command '$1' not found. Asking goose..."
+    echo "👻 Command '$1' not found. Asking ghosty..."
     '{goose_bin}' term run "$@"
     return 0
 }"#,
@@ -102,7 +102,7 @@ end"#,
 
 static NU_CONFIG: ShellConfig = ShellConfig {
     script_template: r#"$env.AGENT_SESSION_ID = "{session_id}"
-def --wrapped @goose [...args] { run-external "{goose_bin}" "term" "run" ...$args }
+def --wrapped @ghosty [...args] { run-external "{goose_bin}" "term" "run" ...$args }
 def --wrapped @g [...args] { run-external "{goose_bin}" "term" "run" ...$args }
 
 if (($env | get -o GHOSTY_NU_PREEXEC_INSTALLED | default false) != true) {
@@ -129,7 +129,7 @@ if (($env | get -o GHOSTY_NU_PREEXEC_INSTALLED | default false) != true) {
         r#"
 $env.config.hooks.command_not_found = {|command_name|
     let prompt = (try { commandline | str trim } catch { $command_name })
-    print $"👻 Command '($command_name)' not found. Asking goose..."
+    print $"👻 Command '($command_name)' not found. Asking ghosty..."
     run-external "{goose_bin}" "term" "run" $prompt | complete | ignore
     null
 }"#,
@@ -198,7 +198,7 @@ pub async fn handle_term_init(
             let session = session_manager
                 .create_session(
                     working_dir,
-                    "Goose Term Session".to_string(),
+                    "Ghosty Term Session".to_string(),
                     SessionType::Terminal,
                     Config::global().get_ghosty_mode().unwrap_or_default(),
                 )
@@ -230,7 +230,7 @@ pub async fn handle_term_init(
 pub async fn handle_term_log(command: String) -> Result<()> {
     let session_id = std::env::var("AGENT_SESSION_ID").map_err(|_| {
         anyhow!(
-            "AGENT_SESSION_ID not set. Initialize terminal integration with `goose term init <shell>` and reload your shell first."
+            "AGENT_SESSION_ID not set. Initialize terminal integration with `ghosty term init <shell>` and reload your shell first."
         )
     })?;
 
@@ -327,7 +327,7 @@ pub async fn handle_term_run(prompt: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// Handle `goose term info` - print compact session info for prompt integration
+/// Handle `ghosty term info` - print compact session info for prompt integration
 pub async fn handle_term_info() -> Result<()> {
     let session_id = match std::env::var("AGENT_SESSION_ID") {
         Ok(id) => id,
@@ -390,7 +390,7 @@ mod tests {
         let script = render_term_init_script(Shell::Nu, "session-123", "/tmp/goose", false);
 
         assert!(script.contains("$env.AGENT_SESSION_ID = \"session-123\""));
-        assert!(script.contains("def --wrapped @goose [...args]"));
+        assert!(script.contains("def --wrapped @ghosty [...args]"));
         assert!(script.contains("def --wrapped @g [...args]"));
         assert!(script.contains("GHOSTY_NU_PREEXEC_INSTALLED"));
         assert!(script.contains("$env.config.hooks.pre_execution"));

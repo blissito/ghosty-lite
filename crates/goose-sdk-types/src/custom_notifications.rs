@@ -3,7 +3,7 @@ use agent_client_protocol::{JsonRpcMessage, JsonRpcNotification};
 use schemars::{JsonSchema, SchemaGenerator};
 use serde::{Deserialize, Serialize};
 
-/// Goose-custom session update notification — a parallel to ACP's
+/// Ghosty-custom session update notification — a parallel to ACP's
 /// `session/update` carrying goose-specific update variants.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcNotification)]
 #[notification(method = "_goose/unstable/session/update")]
@@ -37,7 +37,7 @@ pub enum GooseSessionUpdate {
 
 /// Dedicated provider notification for OAuth device-code flow.
 /// Sent during provider authentication when the ACP client supports
-/// `goose.customNotifications` — avoids a fake empty session ID.
+/// `ghosty.customNotifications` — avoids a fake empty session ID.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcNotification)]
 #[notification(method = "_goose/unstable/providers/authentication/device-code")]
 #[serde(rename_all = "camelCase")]

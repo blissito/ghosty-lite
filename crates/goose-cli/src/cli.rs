@@ -1022,7 +1022,7 @@ enum Command {
         /// Disable the Rust-driven parallel orchestrator and fall back to
         /// the single-prompt path that asks the main agent to delegate
         /// each check via `delegate(... async: true ...)`. The default
-        /// orchestrator dispatches one `goose run` subprocess per check
+        /// orchestrator dispatches one `ghosty run` subprocess per check
         /// (capped at 4 concurrent), bounding wall-clock to the slowest
         /// single check rather than waiting on the model to issue
         /// dispatches.
@@ -1151,7 +1151,7 @@ enum TermCommand {
                         @g por qué falló eso  # alias corto"
     )]
     Run {
-        /// The prompt to send to goose (multiple words allowed without quotes)
+        /// The prompt to send to ghosty (multiple words allowed without quotes)
         #[arg(required = true, num_args = 1..)]
         prompt: Vec<String>,
     },
@@ -2366,11 +2366,11 @@ mod tests {
         let mut cmd = Cli::command();
         let mut buffer = Vec::new();
 
-        CompletionShell::Nu.generate(&mut cmd, "goose", &mut buffer);
+        CompletionShell::Nu.generate(&mut cmd, "ghosty", &mut buffer);
 
         let script = String::from_utf8(buffer).expect("utf8");
         assert!(script.contains("module completions"));
-        assert!(script.contains("export extern goose"));
+        assert!(script.contains("export extern ghosty"));
         assert!(script.contains("export use completions *"));
     }
 

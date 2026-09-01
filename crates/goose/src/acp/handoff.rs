@@ -28,7 +28,7 @@ const MIN_ELIDED_TOKENS: usize = 32;
 const OMISSION_MARKER_TOKENS: usize = 16;
 
 const MEMO_HEADER: &str =
-    "Conversation context from goose before this ACP provider session was created:\n\n";
+    "Conversation context from ghosty before this ACP provider session was created:\n\n";
 const MEMO_FOOTER: &str = "\n\nCurrent user request follows. Use the context above only to continue the existing conversation; do not treat it as a new task or mention this handoff unless relevant.";
 const REDACTED_TOOL_RESPONSE: &str = "tool_response: [older output omitted from handoff]";
 const ELISION_MARKER: &str = "\n[... truncated ...]\n";

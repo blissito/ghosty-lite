@@ -470,7 +470,7 @@ impl ProviderFixture {
             .await?;
         let text = response.as_concat_text().to_lowercase();
         assert!(
-            text.contains("hello goose") || text.contains("test image"),
+            text.contains("hello ghosty") || text.contains("test image"),
             "{text}"
         );
         println!("=== {}::image_content === {}", self.name, text);

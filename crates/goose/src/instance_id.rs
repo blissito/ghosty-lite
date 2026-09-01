@@ -29,7 +29,7 @@ fn load_or_create() -> String {
     id
 }
 
-/// Returns a stable, globally unique identifier for this Goose installation.
+/// Returns a stable, globally unique identifier for this Ghosty installation.
 /// The ID is generated once and persisted to disk, surviving restarts.
 pub fn get_instance_id() -> &'static str {
     &INSTANCE_ID

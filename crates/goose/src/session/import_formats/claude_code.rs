@@ -155,7 +155,7 @@ fn convert_user_message(line: &Value, timestamp: Option<DateTime<Utc>>) -> Optio
         .unwrap_or_else(|| Utc::now().timestamp());
 
     // Tool results in Claude Code live inside `user` messages with role=user
-    // and content blocks of type=tool_result. Goose models tool responses the
+    // and content blocks of type=tool_result. Ghosty models tool responses the
     // same way (on a user-role message), so this maps cleanly.
     let mut msg = Message::user();
     msg.created = created;

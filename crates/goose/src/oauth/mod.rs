@@ -154,7 +154,7 @@ pub struct StaticOAuthClientConfig {
 }
 
 /// Pre-registered client supplied through the environment, used by tools that
-/// drive the flow without an extension config (`goose mcp-probe`, conformance
+/// drive the flow without an extension config (`ghosty mcp-probe`, conformance
 /// driver).
 fn env_static_oauth_client() -> Option<StaticOAuthClientConfig> {
     Some(StaticOAuthClientConfig {
@@ -239,7 +239,7 @@ fn build_authorization_request(
     mcp_server_url: &str,
     previously_granted_scopes: &[String],
 ) -> AuthorizationRequest {
-    let mut request = AuthorizationRequest::new(redirect_uri).with_client_name("goose");
+    let mut request = AuthorizationRequest::new(redirect_uri).with_client_name("ghosty-lite");
     match static_client {
         Some(client) => {
             request = request.with_preregistered_client(client.client_id.clone());

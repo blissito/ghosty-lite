@@ -33,7 +33,7 @@ impl goose_providers::base::ProviderDescriptor for CodexAcpProvider {
         ProviderMetadata::new(
             CODEX_ACP_PROVIDER_NAME,
             "Codex ACP",
-            "Use goose with ChatGPT Plus/Pro or OpenAI API credits via the codex-acp adapter.",
+            "Use ghosty with ChatGPT Plus/Pro or OpenAI API credits via the codex-acp adapter.",
             ACP_CURRENT_MODEL,
             vec![],
             CODEX_ACP_DOC_URL,

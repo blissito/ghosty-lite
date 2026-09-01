@@ -1,6 +1,0 @@
-# The ACP endpoint binds 0.0.0.0, so it requires a secret key; a random one is
-# generated and printed per launch unless GHOSTY_SERVER_TOKEN is set.
-run:
-  - name: ACP Server
-    command: 'export GHOSTY_SERVER_TOKEN="${GHOSTY_SERVER_TOKEN:-$(openssl rand -hex 32)}"; echo "ACP secret key: $GHOSTY_SERVER_TOKEN"; exec goose serve --platform desktop --host 0.0.0.0 --port 3284'
-    port: 3284

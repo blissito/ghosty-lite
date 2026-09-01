@@ -125,8 +125,8 @@ fn main() {
         .take()
         .expect("stdin was piped")
         .write_all(script.to_string().as_bytes())
-        .expect("write probe script to goose stdin");
+        .expect("write probe script to ghosty stdin");
 
-    let status = child.wait().expect("wait for goose");
+    let status = child.wait().expect("wait for ghosty");
     std::process::exit(status.code().unwrap_or(1));
 }

@@ -300,7 +300,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
             .join(format!("{provider_id}.json"));
         assert!(
             custom_provider_path.exists(),
-            "custom provider should be saved in Goose's declarative provider store"
+            "custom provider should be saved in Ghosty's declarative provider store"
         );
         let saved_provider: DeclarativeProviderConfig =
             serde_json::from_str(&std::fs::read_to_string(&custom_provider_path).unwrap())
@@ -322,7 +322,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 .get_secret::<String>("CUSTOM_STARK_ACP_PROVIDER_API_KEY")
                 .unwrap(),
             "created-custom-key",
-            "custom provider create should write through Goose's config store"
+            "custom provider create should write through Ghosty's config store"
         );
         assert!(
             load_provider(&provider_id)
@@ -407,7 +407,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 .get_secret::<String>("CUSTOM_STARK_ACP_PROVIDER_API_KEY")
                 .unwrap(),
             "updated-custom-key",
-            "custom provider update should write through Goose's config store"
+            "custom provider update should write through Ghosty's config store"
         );
         let updated_provider: DeclarativeProviderConfig =
             serde_json::from_str(&std::fs::read_to_string(&custom_provider_path).unwrap())

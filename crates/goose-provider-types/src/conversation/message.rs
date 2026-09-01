@@ -797,7 +797,7 @@ pub struct MessageMetadata {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub output_token_limit_reached: bool,
     /// Whether this message is a steer injected into an active run. UI-only:
-    /// surfaced as `_meta.goose.steer` so clients can mark the steer boundary
+    /// surfaced as `_meta.ghosty.steer` so clients can mark the steer boundary
     /// without matching user-visible text. Never sent to providers.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub steer: bool,

@@ -685,7 +685,7 @@ pub async fn run_load_session_replays_image_attachment<C: Connection>() {
         )
         .await
         .unwrap();
-    assert!(output.text.contains("Hello Goose!"));
+    assert!(output.text.contains("Hello Ghosty!"));
     session.session_updates();
 
     let SessionData { session, .. } = conn.load_session(&session_id, vec![]).await.unwrap();
@@ -1221,7 +1221,7 @@ pub async fn run_prompt_basic<C: Connection>() {
                 .to_string();
             Some((standard_message_id, goose_message_id))
         })
-        .expect("expected live agent message chunk with standard and goose message IDs");
+        .expect("expected live agent message chunk with standard and ghosty message IDs");
     assert!(!standard_message_id.is_empty());
     assert_eq!(standard_message_id, goose_message_id);
     assert_notifications(
@@ -1315,7 +1315,7 @@ pub async fn run_prompt_image<C: Connection>() {
         )
         .await
         .unwrap();
-    assert_eq!(output.text, "Hello Goose!\nThis is a test image.");
+    assert_eq!(output.text, "Hello Ghosty!\nThis is a test image.");
     assert_notifications(
         &session.notifications(),
         &[
@@ -1352,7 +1352,7 @@ pub async fn run_prompt_image_attachment<C: Connection>() {
         )
         .await
         .unwrap();
-    assert!(output.text.contains("Hello Goose!"));
+    assert!(output.text.contains("Hello Ghosty!"));
     assert_notifications(&session.notifications(), &[Notification::AgentMessage]);
     expected_session_id.assert_matches(&session.session_id().0);
 }

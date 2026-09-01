@@ -65,7 +65,7 @@ fn resolve_login_shell_path() -> Option<String> {
         .stderr(Stdio::null());
 
     // Spawn in a new session so that interactive shell job-control setup
-    // cannot steal the terminal foreground from the parent goose process.
+    // cannot steal the terminal foreground from the parent ghosty process.
     cmd.wrap(ProcessSession);
 
     let child = cmd.spawn().ok()?;

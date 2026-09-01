@@ -75,7 +75,7 @@ pub struct AnthropicProvider {
 /// Builder for [`AnthropicProvider`].
 ///
 /// Exposes every field of the provider so that constructors living outside
-/// `anthropic.rs` (e.g. in `anthropic_def.rs`, which lives in the `goose`
+/// `anthropic.rs` (e.g. in `anthropic_def.rs`, which lives in the `ghosty`
 /// crate) can assemble a provider without needing direct access to the
 /// struct's private fields.
 pub struct AnthropicProviderBuilder {

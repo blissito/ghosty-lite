@@ -25,7 +25,7 @@ impl goose_providers::base::ProviderDescriptor for PiAcpProvider {
         ProviderMetadata::new(
             PI_ACP_PROVIDER_NAME,
             "Pi",
-            "Use goose with Pi via the pi-acp adapter.",
+            "Use ghosty with Pi via the pi-acp adapter.",
             ACP_CURRENT_MODEL,
             vec![],
             PI_ACP_DOC_URL,

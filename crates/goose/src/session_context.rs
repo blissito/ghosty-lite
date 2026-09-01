@@ -36,7 +36,7 @@ pub fn session_id_request_builder() -> goose_providers::api_client::RequestBuild
     })
 }
 
-/// Local OS user running goose, shared by the OTLP `user.name` resource
+/// Local OS user running ghosty, shared by the OTLP `user.name` resource
 /// attribute and the `session.user` span attribute so the two never drift.
 pub fn session_user() -> String {
     std::env::var("USER")
@@ -44,7 +44,7 @@ pub fn session_user() -> String {
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
-/// Hostname of the machine running goose, shared by the OTLP `host.name`
+/// Hostname of the machine running ghosty, shared by the OTLP `host.name`
 /// resource attribute and the `session.host` span attribute.
 pub fn session_host() -> String {
     gethostname::gethostname().to_string_lossy().to_string()

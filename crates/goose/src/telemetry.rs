@@ -1,4 +1,4 @@
-//! Fachada de telemetría de goose sobre `ghosty-telemetry`.
+//! Fachada de telemetría de ghosty sobre `ghosty-telemetry`.
 //!
 //! Los call sites del árbol llaman a estas funciones y NADA más: aquí se
 //! clasifica cada señal en un contador cerrado y se descarta todo lo demás.
@@ -195,7 +195,7 @@ mod enabled {
     }
 
     /// El mapa de `ProviderError::telemetry_type()` y de los tipos propios de
-    /// goose a los seis contadores de error del esquema. Lo que no cabe en
+    /// ghosty a los seis contadores de error del esquema. Lo que no cabe en
     /// ninguno (recetas, scheduler, compactación, reintentos) se descarta.
     pub fn classify_error(kind: &str, message: &str) -> Option<ErrorCounter> {
         match kind {

@@ -2077,7 +2077,7 @@ mod tests {
         assert_eq!(result["model"], "gpt-5.6-sol");
         assert!(
             result.get("max_output_tokens").is_none(),
-            "unknown/new models should not receive Goose's fallback max_output_tokens"
+            "unknown/new models should not receive Ghosty's fallback max_output_tokens"
         );
     }
 

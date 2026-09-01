@@ -1,4 +1,4 @@
-// Modified from goose (Apache-2.0); see NOTICE.
+// Modified from ghosty (Apache-2.0); see NOTICE.
 //! `ghosty serve --setup` y `ghosty serve --check`.
 //!
 //! El servidor es la razón de ghosty-lite, así que dejarlo listo es parte del

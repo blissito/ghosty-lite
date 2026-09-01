@@ -88,7 +88,7 @@ fn build_replayed_tool_call(
     }
     goose_meta
         .as_object_mut()
-        .expect("goose metadata was initialized as an object")
+        .expect("ghosty metadata was initialized as an object")
         .extend([tool_chain_summary(&chain_summary)]);
 
     tool_call
@@ -582,7 +582,7 @@ mod tests {
             .meta
             .as_ref()
             .and_then(|meta| meta.get("goose"))
-            .expect("valid initial tool call should contain goose metadata");
+            .expect("valid initial tool call should contain ghosty metadata");
 
         assert_eq!(tool_call.title, "applied dark mode polish");
         assert_eq!(
@@ -612,7 +612,7 @@ mod tests {
             .meta
             .as_ref()
             .and_then(|meta| meta.get("goose"))
-            .expect("valid initial tool call should contain goose metadata");
+            .expect("valid initial tool call should contain ghosty metadata");
 
         assert_eq!(tool_call.title, "developer: shell");
         assert_eq!(

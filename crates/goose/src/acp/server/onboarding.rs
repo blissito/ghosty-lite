@@ -160,7 +160,7 @@ fn import_failure_warning(
     error: &anyhow::Error,
 ) -> String {
     let source_name = match source_kind {
-        OnboardingImportSourceKind::GooseConfig => "Goose configuration",
+        OnboardingImportSourceKind::GooseConfig => "Ghosty configuration",
         OnboardingImportSourceKind::ClaudeDesktop => "Claude Desktop tools",
     };
     format!(
@@ -228,13 +228,13 @@ fn scan_goose_config_candidate(path: &Path) -> Option<OnboardingImportCandidate>
         .unwrap_or_default();
 
     if counts.sessions > 0 {
-        warnings.push("Sessions are already shared through Goose's data store.".to_string());
+        warnings.push("Sessions are already shared through Ghosty's data store.".to_string());
     }
 
     Some(OnboardingImportCandidate {
         id: candidate_id(GHOSTY_CONFIG_PREFIX, path),
         source_kind: OnboardingImportSourceKind::GooseConfig,
-        display_name: "Existing Goose configuration".to_string(),
+        display_name: "Existing Ghosty configuration".to_string(),
         path: path.to_string_lossy().to_string(),
         counts,
         warnings,
@@ -358,7 +358,7 @@ fn apply_goose_config_candidate(
 
     result
         .warnings
-        .push("Session history already lives in the Goose data store when available.".to_string());
+        .push("Session history already lives in the Ghosty data store when available.".to_string());
     Ok(result)
 }
 
@@ -623,7 +623,7 @@ mod tests {
         assert!(response
             .warnings
             .iter()
-            .any(|warning| warning.starts_with("Skipped Goose configuration import at ")));
+            .any(|warning| warning.starts_with("Skipped Ghosty configuration import at ")));
         let extensions = target_config.get_param::<Mapping>("extensions").unwrap();
         assert!(extensions.contains_key(serde_yaml::Value::String(name_to_key("github"))));
     }

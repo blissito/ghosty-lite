@@ -19,7 +19,7 @@
 //! }
 //! ```
 //!
-//! Goose currently supports `type: "command"` actions. Unknown event names and
+//! Ghosty currently supports `type: "command"` actions. Unknown event names and
 //! action types are ignored per the spec. Hook scripts receive the JSON event
 //! context on stdin and SHOULD exit 0 on success.
 
@@ -226,7 +226,7 @@ pub struct HookContext {
     pub event: String,
     pub session_id: String,
     pub matcher_context: Option<String>,
-    /// Stable identifier for one tool call, the same value goose records as
+    /// Stable identifier for one tool call, the same value ghosty records as
     /// `gen_ai.tool.call.id`. Correlates the pre and post events of a single
     /// call, which tool name plus input cannot do when a call repeats.
     #[serde(skip_serializing_if = "Option::is_none")]

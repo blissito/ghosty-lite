@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 /// Raíz de estado de ghosty-lite para los servidores MCP builtin: la misma
 /// que resuelve `goose::config::paths::Paths` (GHOSTY_PATH_ROOT, o
-/// `~/.ghosty-lite`). No dependemos del crate goose para no crear un ciclo.
+/// `~/.ghosty-lite`). No dependemos del crate ghosty para no crear un ciclo.
 pub fn ghosty_home() -> std::path::PathBuf {
     if let Some(root) = std::env::var_os("GHOSTY_PATH_ROOT") {
         let root = std::path::PathBuf::from(root);

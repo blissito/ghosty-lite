@@ -213,7 +213,7 @@ async fn resume_saved_provider_session(
 }
 
 pub(super) const DEFAULT_PROVIDER_ID: &str = "goose";
-pub(super) const DEFAULT_PROVIDER_LABEL: &str = "Goose (Default)";
+pub(super) const DEFAULT_PROVIDER_LABEL: &str = "Ghosty (Default)";
 const PROVIDER_CONFIG_STATUS_CHECK_CONCURRENCY: usize = 16;
 
 /// In-memory state for an active ACP session.
@@ -221,7 +221,7 @@ const PROVIDER_CONFIG_STATUS_CHECK_CONCURRENCY: usize = 16;
 /// ## Terminology (temporary, until all clients migrate to ACP)
 ///
 /// The ACP protocol uses "session" to mean the conversation as the human sees it —
-/// a durable, append-only exchange of messages. Internally, goose also has a concept
+/// a durable, append-only exchange of messages. Internally, ghosty also has a concept
 /// called "Session" (the `sessions` DB table) which represents the agent's working
 /// state: the message list the LLM sees, compaction state, provider binding, etc.
 ///
@@ -901,7 +901,7 @@ impl GooseAcpAgent {
             .unwrap_or(false)
     }
 
-    // TODO: goose reads Paths::in_state_dir globally (e.g. RequestLog), ignoring this data_dir.
+    // TODO: ghosty reads Paths::in_state_dir globally (e.g. RequestLog), ignoring this data_dir.
     pub async fn new(options: GooseAcpAgentOptions) -> Result<Self> {
         let session_manager = Arc::new(SessionManager::new(options.data_dir));
 
@@ -1776,11 +1776,14 @@ impl GooseAcpAgent {
             .mcp_capabilities(McpCapabilities::new().http(true))
             .meta(agent_capabilities_meta());
         Ok(InitializeResponse::new(args.protocol_version)
-            .agent_info(Implementation::new("goose", env!("CARGO_PKG_VERSION")))
+            .agent_info(Implementation::new(
+                "ghosty-lite",
+                env!("CARGO_PKG_VERSION"),
+            ))
             .agent_capabilities(capabilities)
             .auth_methods(vec![AuthMethod::Agent(
                 AuthMethodAgent::new("goose-provider", "Configure Provider")
-                    .description("Run `goose configure` to set up your AI provider and API key"),
+                    .description("Run `ghosty configure` to set up your AI provider and API key"),
             )]))
     }
 
@@ -2518,7 +2521,7 @@ where
 /// A lazily-initialized agent connection used by the HTTP/WebSocket transport.
 ///
 /// The `agent-client-protocol-http` server takes a synchronous factory that
-/// yields a [`ConnectTo<Client>`] per connection, but creating a goose agent is
+/// yields a [`ConnectTo<Client>`] per connection, but creating a ghosty agent is
 /// async. Agent creation is therefore deferred into [`ConnectTo::connect_to`],
 /// which runs as the connection's serving future.
 pub struct GooseAgentConnection {

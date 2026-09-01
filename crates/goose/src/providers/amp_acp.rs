@@ -24,7 +24,7 @@ impl goose_providers::base::ProviderDescriptor for AmpAcpProvider {
         ProviderMetadata::new(
             AMP_ACP_PROVIDER_NAME,
             "Amp",
-            "Use goose with your Amp subscription via the amp-acp adapter.",
+            "Use ghosty with your Amp subscription via the amp-acp adapter.",
             ACP_CURRENT_MODEL,
             vec![],
             AMP_ACP_DOC_URL,

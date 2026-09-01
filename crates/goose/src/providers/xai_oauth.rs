@@ -165,7 +165,7 @@ fn build_authorize_url(pkce: &PkceChallenge, state: &str, nonce: &str) -> Result
     let redirect = redirect_uri();
     // `plan=generic` opts the consent screen into xAI's generic OAuth plan
     // tier; without it, accounts.x.ai rejects loopback OAuth from
-    // non-allowlisted clients. `referrer=goose` lets xAI attribute
+    // non-allowlisted clients. `referrer=ghosty` lets xAI attribute
     // goose-originated logins.
     let params = [
         ("response_type", "code"),
@@ -360,7 +360,7 @@ async fn poll_device_code_token(device: &DeviceCodeResponse) -> Result<TokenResp
             }
             Some("expired_token") => {
                 return Err(anyhow!(
-                    "xAI device code expired - please re-run goose configure"
+                    "xAI device code expired - please re-run ghosty configure"
                 ));
             }
             other => {
@@ -381,7 +381,7 @@ async fn poll_device_code_token(device: &DeviceCodeResponse) -> Result<TokenResp
 const HTML_SUCCESS_TEMPLATE: &str = r#"<!doctype html>
 <html>
   <head>
-    <title>goose - xAI Authorization Successful</title>
+    <title>Ghosty - xAI Authorization Successful</title>
     <style>
       body {
         font-family: system-ui, -apple-system, sans-serif;
@@ -420,7 +420,7 @@ fn html_error(error: &str) -> String {
         r#"<!doctype html>
 <html>
   <head>
-    <title>goose - xAI Authorization Failed</title>
+    <title>Ghosty - xAI Authorization Failed</title>
     <style>
       body {{
         font-family: system-ui, -apple-system, sans-serif;
@@ -573,7 +573,7 @@ async fn perform_loopback_oauth_flow(auth_state: &XaiAuthState) -> Result<TokenD
 
     if webbrowser::open(&auth_url).is_err() {
         tracing::info!(
-            "Please open this URL in your browser to authorize goose with xAI:\n{}",
+            "Please open this URL in your browser to authorize ghosty with xAI:\n{}",
             auth_url
         );
     }
@@ -598,7 +598,7 @@ async fn perform_device_code_flow() -> Result<TokenData> {
         device.user_code
     );
     eprintln!(
-        "\nTo authorize goose with xAI, open this URL in any browser:\n  {}\nand enter code: {}\n",
+        "\nTo authorize ghosty with xAI, open this URL in any browser:\n  {}\nand enter code: {}\n",
         url, device.user_code
     );
     let tokens = poll_device_code_token(&device).await?;

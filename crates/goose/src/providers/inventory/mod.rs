@@ -1070,8 +1070,8 @@ fn enrich_model_ids_with_canonical(
         models.push(model);
     }
 
-    // For Databricks providers, prefer goose- prefixed model_ids when there are duplicates.
-    // Re-scan: if a later model_id with "goose-" prefix maps to the same display name,
+    // For Databricks providers, prefer ghosty- prefixed model_ids when there are duplicates.
+    // Re-scan: if a later model_id with "ghosty-" prefix maps to the same display name,
     // swap it in.
     if matches!(provider_family, "databricks" | "databricks_v2") {
         let mut name_to_idx: HashMap<String, usize> = HashMap::new();

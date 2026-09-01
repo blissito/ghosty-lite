@@ -25,7 +25,7 @@ pub fn run_read_migrations(config: &mut Mapping) {
 }
 
 /// Renombra en config.yaml toda clave `GOOSE_*` a `GHOSTY_*` (una instalación
-/// que venga de goose). Si ya existe la clave nueva, la vieja se descarta: la
+/// que venga de ghosty). Si ya existe la clave nueva, la vieja se descarta: la
 /// nueva la escribió ghosty-lite y manda. Devuelve `true` si cambió algo.
 fn migrate_goose_keys(config: &mut Mapping) -> bool {
     let legacy: Vec<String> = config

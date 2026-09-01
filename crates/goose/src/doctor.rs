@@ -244,10 +244,10 @@ async fn try_other_providers(
 fn describe_error(e: &ProviderError) -> String {
     match e {
         ProviderError::NotConfigured => {
-            "Provider is not configured. Run `goose configure` to set it up.".to_string()
+            "Provider is not configured. Run `ghosty configure` to set it up.".to_string()
         }
         ProviderError::Authentication(_) => {
-            "Authentication failed — check your API key. Run `goose configure` to update it."
+            "Authentication failed — check your API key. Run `ghosty configure` to update it."
                 .to_string()
         }
         ProviderError::CreditsExhausted { top_up_url, .. } => {

@@ -11,7 +11,7 @@ use strum::VariantNames;
 
 use super::{CompletionCache, HintStatus};
 
-/// Completer for goose CLI commands
+/// Completer for ghosty CLI commands
 pub struct GooseCompleter {
     pub completion_cache: Arc<std::sync::RwLock<CompletionCache>>,
     filename_completer: FilenameCompleter,

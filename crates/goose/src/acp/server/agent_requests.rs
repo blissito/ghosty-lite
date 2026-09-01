@@ -1,4 +1,4 @@
-//! Goose-custom **agent → client** requests: server-initiated JSON-RPC requests
+//! Ghosty-custom **agent → client** requests: server-initiated JSON-RPC requests
 //! that expect a response from the client (unlike notifications, which are
 //! fire-and-forget). This module aggregates their JSON schemas for the ACP
 //! schema generator, parallel to `custom_notification_schemas`.

@@ -630,7 +630,7 @@ fn test_steer_session_adds_input_to_active_prompt() {
             steer_chunks
                 .iter()
                 .any(|t| t.contains("steer while active")),
-            "expected a chunk marked _meta.goose.steer with the steer text, got: {steer_chunks:?}"
+            "expected a chunk marked _meta.ghosty.steer with the steer text, got: {steer_chunks:?}"
         );
 
         // The queued steer must be announced (so a UI can show it as pending)
@@ -983,7 +983,7 @@ fn test_provider_switching_updates_session_state() {
 
         conn.set_config_option(&session_id, "provider", "goose")
             .await
-            .expect("provider reset to goose should succeed");
+            .expect("provider reset to ghosty should succeed");
     });
 }
 

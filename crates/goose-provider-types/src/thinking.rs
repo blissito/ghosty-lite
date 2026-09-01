@@ -345,7 +345,7 @@ pub struct ThinkingEffortOption {
     pub label: String,
 }
 
-/// A harness-advertised effort config option mirrored verbatim into goose's
+/// A harness-advertised effort config option mirrored verbatim into ghosty's
 /// `thinking_effort` session option.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThinkingEffortCapability {

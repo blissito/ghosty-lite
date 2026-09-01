@@ -120,7 +120,7 @@ pub(super) struct ModelOption {
 
 /// The currently selected model and the set of available models for a session.
 ///
-/// Replaces the removed `SessionModelState` ACP schema type; goose now surfaces
+/// Replaces the removed `SessionModelState` ACP schema type; ghosty now surfaces
 /// model selection through the generic session config option API.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ModelSelection {
@@ -233,7 +233,7 @@ pub(super) fn build_mode_state(
     ))
 }
 
-/// The provider decides whether goose owns the effort menu; a session without a
+/// The provider decides whether ghosty owns the effort menu; a session without a
 /// live provider keeps the model-name based path.
 pub(super) async fn agent_thinking_effort_support(agent: &Agent) -> ThinkingEffortSupport {
     match agent.provider().await {
@@ -333,7 +333,7 @@ pub(super) fn build_config_options(
 /// A provider that manages its own reasoning decides the menu: it mirrors the
 /// agent's effort selector verbatim, or honestly offers nothing when the agent
 /// has no such knob for the current model. Only providers that leave effort to
-/// goose fall back to the model-name based values, which the ACP sentinel model
+/// ghosty fall back to the model-name based values, which the ACP sentinel model
 /// name can never satisfy.
 fn build_thinking_effort_choices(
     model_config: &ModelConfig,
@@ -372,7 +372,7 @@ fn build_thinking_effort_choices(
 
 /// The goose-side value that will actually be sent wins — `resolve_effort_value`
 /// is shared with the provider's send path — then whatever the agent currently
-/// has, which is what it keeps when goose sends nothing.
+/// has, which is what it keeps when ghosty sends nothing.
 fn capability_thinking_effort_value(
     capability: &ThinkingEffortCapability,
     model_config: &ModelConfig,

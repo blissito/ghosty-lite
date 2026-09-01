@@ -325,7 +325,7 @@ fn apply_gemini_compatibility(model_name: &str, payload: &mut Value, messages: &
 /// OpenRouter translates OpenAI `role: tool` messages into Gemini
 /// `function_response` parts. Gemini rejects a response containing a literal
 /// JSON Schema `$ref` key, treating its value as a function-response part name
-/// instead of arbitrary tool text, and Goose replays persisted history, so one
+/// instead of arbitrary tool text, and Ghosty replays persisted history, so one
 /// such tool result breaks every later turn in the session.
 ///
 /// Rewrite the token and prepend a note so the model can reconstruct the

@@ -919,7 +919,7 @@ impl CliSession {
         };
         self.agent.update_goose_mode(mode, &self.session_id).await?;
         config.set_ghosty_mode(mode)?;
-        output::goose_mode_message(&format!("Goose mode set to '{mode}'"));
+        output::goose_mode_message(&format!("Ghosty mode set to '{mode}'"));
         Ok(())
     }
 
@@ -1430,7 +1430,7 @@ impl CliSession {
                 if should_act {
                     output::render_act_on_plan();
                     self.run_mode = RunMode::Normal;
-                    // set goose mode: auto if that isn't already the case
+                    // set ghosty mode: auto if that isn't already the case
                     let config = Config::global();
                     let curr_goose_mode = config.get_ghosty_mode().unwrap_or_default();
                     if curr_goose_mode != GooseMode::Auto {
@@ -1448,7 +1448,7 @@ impl CliSession {
                         .await?;
                     output::hide_thinking();
 
-                    // Reset run & goose mode
+                    // Reset run & ghosty mode
                     if curr_goose_mode != GooseMode::Auto {
                         config.set_ghosty_mode(curr_goose_mode)?;
                     }

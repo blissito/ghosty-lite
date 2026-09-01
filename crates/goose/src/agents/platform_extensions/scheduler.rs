@@ -1,4 +1,4 @@
-//! Exposes schedule management when Goose has a scheduler configured.
+//! Exposes schedule management when Ghosty has a scheduler configured.
 
 use rmcp::model::{
     CallToolResult, ContentBlock, Implementation, InitializeResult, ListToolsResult,

@@ -233,7 +233,7 @@ impl ComputerControllerServer {
     pub fn new() -> Self {
         // choose_app_strategy().cache_dir()
         // - macOS/Linux: ~/.cache/goose/computer_controller/
-        // - Windows:     ~\AppData\Local\Block\goose\cache\computer_controller\
+        // - Windows:     ~\AppData\Local\Block\ghosty\cache\computer_controller\
         // keep previous behavior of defaulting to /tmp/
         let cache_dir = crate::ghosty_home()
             .join("cache")

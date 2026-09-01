@@ -27,7 +27,7 @@ struct InitialSessionConfig {
 /// session row after it is created.
 struct NewSessionMetaFields {
     project_id: Option<String>,
-    /// Client-supplied title, recorded as user-set so goose's own name
+    /// Client-supplied title, recorded as user-set so ghosty's own name
     /// generation leaves it alone. `None` when a recipe title took precedence.
     client_title: Option<String>,
 }

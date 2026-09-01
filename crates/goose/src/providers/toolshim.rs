@@ -123,7 +123,7 @@ fn resolve_tool_name(raw_tool_name: &str, tools: &[Tool]) -> Option<String> {
         .unwrap_or(without_functions_prefix)
         .trim();
 
-    // Also try replacing dots with double-underscores (goose tool name convention)
+    // Also try replacing dots with double-underscores (ghosty tool name convention)
     let with_dunder = without_functions_prefix.replace('.', "__");
 
     let mut candidates = vec![

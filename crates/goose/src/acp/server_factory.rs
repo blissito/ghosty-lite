@@ -39,7 +39,7 @@ impl AcpServer {
     }
 
     /// Start the scheduler now instead of on first client connect, so a
-    /// headless `goose serve` runs scheduled jobs; on failure `create_agent`
+    /// headless `ghosty serve` runs scheduled jobs; on failure `create_agent`
     /// retries. No-op when the scheduler is disabled.
     pub async fn start_scheduler(&self) -> Result<()> {
         self.scheduler().await.map(|_| ())
@@ -72,7 +72,7 @@ impl AcpServer {
     }
 
     /// Create an agent whose sessions use `session_cwd` instead of this
-    /// server's configured default. Used by the roaming bridge on `goose
+    /// server's configured default. Used by the roaming bridge on `ghosty
     /// serve --roam`: the serve-wide server keeps `session_cwd: None` for
     /// local ACP clients whose paths are real on this machine, while each
     /// roaming connection gets a host-controlled working directory (the

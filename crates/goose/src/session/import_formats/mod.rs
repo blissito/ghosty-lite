@@ -1,6 +1,6 @@
 //! Importers for non-goose session formats.
 //!
-//! Goose's native session export is a JSON-serialized [`crate::session::Session`].
+//! Ghosty's native session export is a JSON-serialized [`crate::session::Session`].
 //! These submodules let users also import sessions exported by other coding
 //! agents — currently:
 //!
@@ -8,7 +8,7 @@
 //! - **Codex** (`.jsonl` rollouts under `~/.codex/sessions/YYYY/MM/DD/...`)
 //! - **Pi** (`.jsonl` files under `~/.pi/agent/sessions/...`)
 //!
-//! The strategy is to convert any supported foreign format into goose's
+//! The strategy is to convert any supported foreign format into ghosty's
 //! native [`Session`] JSON, then hand it off to the existing
 //! `SessionManager::import_session` pipeline.
 
@@ -72,7 +72,7 @@ pub(crate) fn build_session_json(session: ImportedSession) -> Value {
 /// Detected import source format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImportFormat {
-    /// Native goose session export — a JSON object representing a `Session`.
+    /// Native ghosty session export — a JSON object representing a `Session`.
     Goose,
     /// Claude Code `.jsonl` transcript (one JSON object per line, no header).
     ClaudeCode,
@@ -86,7 +86,7 @@ pub enum ImportFormat {
 ///
 /// We peek at the first non-blank line:
 /// - If it parses as a JSON object whose top-level has `working_dir`/`workingDir`
-///   and a `conversation` (or `messages`) field, it's goose.
+///   and a `conversation` (or `messages`) field, it's ghosty.
 /// - If the *first* line is `{"type":"session", ...}` it's pi.
 /// - If it's a JSON-Lines stream with per-line `type` fields like
 ///   `user`/`assistant`/`attachment`, it's Claude Code.
@@ -105,7 +105,7 @@ pub fn detect_format(content: &str) -> ImportFormat {
         {
             return ImportFormat::Pi;
         }
-        // Claude Code lines always include a sessionId; goose's native JSON is
+        // Claude Code lines always include a sessionId; ghosty's native JSON is
         // a single multi-line object whose first *parsed* line is `{` only.
         if v.is_object()
             && v.get("sessionId").is_some()
@@ -115,7 +115,7 @@ pub fn detect_format(content: &str) -> ImportFormat {
         }
     }
 
-    // Goose's pretty-printed export starts with `{` and *eventually* contains
+    // Ghosty's pretty-printed export starts with `{` and *eventually* contains
     // a full Session object — try to parse the entire payload.
     if serde_json::from_str::<serde_json::Value>(content)
         .ok()
@@ -156,7 +156,7 @@ pub fn convert_to_goose_session_json(content: &str) -> Result<String> {
     }
 }
 
-/// Exports from goose versions before `usage`/`accumulated_usage` existed
+/// Exports from ghosty versions before `usage`/`accumulated_usage` existed
 /// store token counts as flat fields.
 fn upgrade_legacy_token_fields(content: &str) -> String {
     let Ok(Value::Object(mut obj)) = serde_json::from_str::<Value>(content) else {

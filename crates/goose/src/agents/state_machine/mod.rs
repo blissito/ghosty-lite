@@ -2,7 +2,7 @@
 //!
 //! Callers persist incoming messages, construct `Step`s from their own operations,
 //! and choose whether to call `StateMachine::step`, `StateMachine::apply`, or
-//! `StateMachine::run`. Goose's concrete operations remain internal because their
+//! `StateMachine::run`. Ghosty's concrete operations remain internal because their
 //! configuration is part of `Agent::reply`, not the state-machine protocol.
 
 mod effects;

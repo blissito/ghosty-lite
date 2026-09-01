@@ -184,7 +184,7 @@ async fn test_replayed_session(
 
     // Setup test file for developer extension tests
     let test_file_path = "/tmp/goose_test/goose.txt";
-    fs::write(test_file_path, "# goose\n").ok();
+    fs::write(test_file_path, "# ghosty\n").ok();
     let replay_file_name = command
         .iter()
         .map(|s| s.replace("/", "_"))

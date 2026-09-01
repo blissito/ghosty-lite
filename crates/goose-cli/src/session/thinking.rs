@@ -1,4 +1,4 @@
-// Modified from goose (Apache-2.0); see NOTICE.
+// Modified from ghosty (Apache-2.0); see NOTICE.
 use rand::seq::IndexedRandom;
 
 /// Frases que gira el indicador mientras el modelo piensa. Tono fantasma, corto,

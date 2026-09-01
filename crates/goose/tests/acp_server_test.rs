@@ -1015,7 +1015,7 @@ fn test_new_session_prefers_recipe_title_over_meta_session_title() {
             .unwrap();
 
         // The recipe title wins, and the session is not marked user-set so
-        // goose's own recipe-title naming path still applies.
+        // ghosty's own recipe-title naming path still applies.
         assert_eq!(
             session_title(&conn, &session_id).await,
             ("Recipe title".to_string(), false)

@@ -27,10 +27,10 @@ fn secrets_lock_path(path: &Path) -> PathBuf {
     PathBuf::from(lock_path)
 }
 
-// ─── Compatibilidad con instalaciones de goose ────────────────────────────────
+// ─── Compatibilidad con instalaciones de ghosty ────────────────────────────────
 // Las claves de config son también nombres de variable de entorno (`GHOSTY_MODE`
 // se lee de `env` y luego de config.yaml por el MISMO nombre). Una instalación
-// que venga de goose las tiene como `GOOSE_*`: se leen como respaldo, nunca se
+// que venga de ghosty las tiene como `GOOSE_*`: se leen como respaldo, nunca se
 // escriben. `migrations::migrate_goose_keys` las renombra en config.yaml al
 // cargarla.
 
@@ -106,7 +106,7 @@ impl From<keyring::Error> for ConfigError {
     }
 }
 
-/// Configuration management for goose.
+/// Configuration management for ghosty.
 ///
 /// This module provides a flexible configuration system that supports:
 /// - Dynamic configuration keys
@@ -1185,7 +1185,7 @@ impl Config {
     ///
     /// A synchronous keychain read can block indefinitely — e.g. an unsigned
     /// binary triggers a macOS keychain ACL prompt that can't be answered when
-    /// running headless or over piped stdio (as with `goose acp`). Because this
+    /// running headless or over piped stdio (as with `ghosty acp`). Because this
     /// read sits on the `session/new` critical path, a block there hangs the
     /// whole async runtime. Bounding it keeps the runtime responsive.
     ///

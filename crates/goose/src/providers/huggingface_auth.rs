@@ -388,7 +388,7 @@ async fn refreshed_or_usable_oauth_token_from_path(
 const HTML_SUCCESS_TEMPLATE: &str = r#"<!doctype html>
 <html>
   <head>
-    <title>goose - Hugging Face Authorization Successful</title>
+    <title>Ghosty - Hugging Face Authorization Successful</title>
     <script>setTimeout(() => window.close(), {timeout_ms});</script>
     <style>
       body {{
@@ -419,7 +419,7 @@ fn html_error(error: &str) -> String {
         r#"<!doctype html>
 <html>
   <head>
-    <title>goose - Hugging Face Authorization Failed</title>
+    <title>Ghosty - Hugging Face Authorization Failed</title>
     <style>
       body {{
         font-family: system-ui, -apple-system, sans-serif;
@@ -569,7 +569,7 @@ async fn perform_loopback_oauth_flow(client_id: &str) -> Result<HuggingFaceToken
 
     if webbrowser::open(&auth_url).is_err() {
         tracing::info!(
-            "Please open this URL in your browser to authorize goose with Hugging Face:\n{}",
+            "Please open this URL in your browser to authorize ghosty with Hugging Face:\n{}",
             auth_url
         );
     }

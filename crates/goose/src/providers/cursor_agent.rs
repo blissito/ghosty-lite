@@ -133,7 +133,7 @@ impl CursorAgentProvider {
         Ok(Vec::new())
     }
 
-    /// Convert goose messages to a simple prompt format for cursor-agent CLI
+    /// Convert ghosty messages to a simple prompt format for cursor-agent CLI
     fn messages_to_cursor_agent_format(&self, system: &str, messages: &[Message]) -> String {
         let mut full_prompt = String::new();
 

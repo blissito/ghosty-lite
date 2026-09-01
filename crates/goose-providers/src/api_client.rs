@@ -309,7 +309,7 @@ impl ApiClient {
         Ok(client_builder)
     }
 
-    /// Reject custom TLS settings when goose is compiled without a TLS backend.
+    /// Reject custom TLS settings when ghosty is compiled without a TLS backend.
     #[cfg(not(feature = "rustls-tls"))]
     fn configure_tls(
         client_builder: reqwest::ClientBuilder,

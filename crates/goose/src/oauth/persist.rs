@@ -11,9 +11,9 @@ struct PersistedCredentials {
     requested_scopes: Option<Vec<String>>,
 }
 
-/// Goose-specific credential store that uses the Config system
+/// Ghosty-specific credential store that uses the Config system
 ///
-/// This implementation stores OAuth credentials in the goose configuration
+/// This implementation stores OAuth credentials in the ghosty configuration
 /// system, which handles secure storage (e.g., keychain integration).
 
 #[derive(Clone)]

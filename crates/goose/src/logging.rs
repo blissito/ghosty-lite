@@ -45,7 +45,7 @@ fn build_env_filter(extra_directives: &[&str]) -> EnvFilter {
     filter
 }
 
-/// Set up file-based (and optionally console) tracing for a goose component.
+/// Set up file-based (and optionally console) tracing for a ghosty component.
 ///
 /// Call `try_init` on the returned subscriber; callers are responsible for the
 /// `Once` guard or direct init as appropriate for their use case.

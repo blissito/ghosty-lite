@@ -3,7 +3,7 @@ use crate::agents::extension_manager::ExtensionManager;
 use crate::agents::tool_execution::ToolCallContext;
 use crate::agents::types::SharedProvider;
 use crate::session_context::{SESSION_ID_HEADER, TOOL_CALL_REQUEST_ID_HEADER, WORKING_DIR_HEADER};
-/// MCP client implementation for Goose
+/// MCP client implementation for Ghosty
 #[expect(deprecated)]
 use rmcp::model::{CreateMessageRequestParams, CreateMessageResult, SamplingMessage};
 #[expect(deprecated)]
@@ -447,7 +447,7 @@ impl ClientHandler for GooseClient {
         let system_prompt = params
             .system_prompt
             .as_deref()
-            .unwrap_or("You are a general-purpose AI agent called goose");
+            .unwrap_or("You are a general-purpose AI agent called ghosty");
 
         let model_config = resolve_sampling_model_config().map_err(|e| {
             ErrorData::new(

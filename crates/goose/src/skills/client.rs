@@ -42,7 +42,7 @@ impl SkillsClient {
         })
     }
 
-    /// Controls whether Goose's bundled skills are exposed by this client.
+    /// Controls whether Ghosty's bundled skills are exposed by this client.
     /// Bundled skills are enabled by default.
     pub fn with_builtin_skills(mut self, enabled: bool) -> Self {
         self.exclude_builtin_skills = !enabled;

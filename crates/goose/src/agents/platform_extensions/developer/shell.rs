@@ -235,8 +235,8 @@ pub(crate) fn resolve_login_shell_path() -> Option<String> {
         .stderr(Stdio::null());
 
     // Spawn in a new session so that bash's interactive job-control setup
-    // (TIOCSPGRP) cannot steal the terminal foreground from goose, which
-    // would cause goose to receive SIGTTIN and be suspended on startup.
+    // (TIOCSPGRP) cannot steal the terminal foreground from ghosty, which
+    // would cause ghosty to receive SIGTTIN and be suspended on startup.
     cmd.wrap(ProcessSession);
 
     let mut child = cmd.spawn().ok()?;

@@ -93,7 +93,7 @@ mod tests {
         let goose = entries
             .iter()
             .find(|entry| entry.provider_id == "goose")
-            .expect("setup catalog should include synthetic goose");
+            .expect("setup catalog should include synthetic ghosty");
         assert_eq!(goose.category, ProviderSetupCategory::Agent);
         assert!(!goose.acp);
         assert_eq!(goose.setup_method, ProviderSetupMethod::None);

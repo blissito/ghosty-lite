@@ -621,7 +621,7 @@ impl Agent {
                             if let Some(ref meta) = tool.meta {
                                 // Merge registry meta into existing tool_meta;
                                 // existing keys win so provider markers (e.g.
-                                // goose.external_dispatch) survive coercion.
+                                // ghosty.external_dispatch) survive coercion.
                                 let new_meta = serde_json::to_value(meta).ok();
                                 coerced_req.tool_meta =
                                     match (coerced_req.tool_meta.take(), new_meta) {
@@ -1593,7 +1593,7 @@ mod tests {
 
     #[tokio::test]
     async fn categorize_tool_requests_skips_externally_dispatched_and_preserves_marker() {
-        // External requests must (1) survive coercion with goose.external_dispatch
+        // External requests must (1) survive coercion with ghosty.external_dispatch
         // intact, (2) be excluded from both dispatch buckets, (3) stay in
         // filtered_message.
         use crate::conversation::message::TOOL_META_EXTERNAL_DISPATCH_KEY;
@@ -1634,7 +1634,7 @@ mod tests {
         };
         assert!(
             tool_req.was_executed_externally(),
-            "goose.external_dispatch marker was clobbered by coercion; merged tool_meta = {:?}",
+            "ghosty.external_dispatch marker was clobbered by coercion; merged tool_meta = {:?}",
             tool_req.tool_meta
         );
         let merged = tool_req
