@@ -43,26 +43,7 @@ rustls-tls = [
     "oauth2/rustls-tls",
     "goose-providers/rustls-tls",
 ]
-native-tls = [
-    "dep:rcgen",
-    "dep:pem",
-    "dep:axum-server",
-    "dep:openssl",
-    "axum-server/tls-openssl",
-    # rcgen requires a crypto backend; ring is used here because aws-lc-rs is
-    # reserved for the rustls-tls path and openssl does not provide this interface.
-    "rcgen/ring",
-    "reqwest/native-tls",
-    "rmcp/reqwest-native-tls",
-    "smithy-transport-reqwest?/native-tls",
-    "sqlx/tls-native-tls",
-    "jsonwebtoken/rust_crypto",
-    "oauth2/reqwest",
-    "oauth2/native-tls",
-    "goose-providers/native-tls",
-]
 system-keyring = ["dep:keyring"]
-portable-default = ["rustls-tls", "aws-providers", "otel"]
 
 [lints]
 workspace = true
@@ -77,7 +58,6 @@ rmcp = { workspace = true, features = [
     "transport-streamable-http-client-unix-socket",
 ] }
 oauth2 = { version = "5.0", default-features = false }
-arboard = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
@@ -193,7 +173,6 @@ rustls = { workspace = true, optional = true }
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem"], optional = true }
 axum-server = { workspace = true, optional = true }
 aws-lc-rs = { version = "1.17", default-features = false, optional = true }
-openssl = { version = "0.10.66", default-features = false, optional = true }
 pem = { version = "4.0.0", default-features = false, features = ["std"], optional = true }
 
 pctx_code_mode = { version = "0.5.0", default-features = false, optional = true }

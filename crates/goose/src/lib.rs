@@ -1,8 +1,5 @@
 #![recursion_limit = "256"]
 
-#[cfg(all(feature = "rustls-tls", feature = "native-tls"))]
-compile_error!("Features `rustls-tls` and `native-tls` are mutually exclusive");
-
 pub mod acp;
 pub use goose_sdk_types::{custom_notifications, custom_requests};
 pub mod action_required_manager;

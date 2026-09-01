@@ -45,6 +45,34 @@ def item_end(lines, i):
     first = lines[i]
     col = 0  # columna desde la que se cuentan los delimitadores en la primera línea
     arrow = arm_arrow(first)
+    if arrow is None and not SEMI_START.match(first) and first.rstrip().endswith('{') \
+            and re.match(r'^\s*(Some|None|Ok|Err|[A-Z][A-Za-z0-9_:]*)\s*[({]', first):
+        # patrón de brazo partido en varias líneas: buscar la línea del `=>`
+        k = i
+        depth = 0
+        while k < len(lines):
+            depth += sum(lines[k].count(c) for c in '{([') - sum(lines[k].count(c) for c in '})]')
+            if depth <= 0 and arm_arrow(lines[k]) is not None:
+                break
+            k += 1
+        if k < len(lines) and arm_arrow(lines[k]) is not None:
+            a = arm_arrow(lines[k])
+            rest = lines[k][a+2:].strip()
+            if not rest.startswith('{'):
+                return k + 1
+            # bloque tras el `=>`: contar desde ahí
+            depth = 0; seen = False; m = k; j = a + 2
+            while m < len(lines):
+                line = lines[m]
+                while j < len(line):
+                    c = line[j]
+                    if c in '{([': depth += 1; seen = True
+                    elif c in '})]':
+                        depth -= 1
+                        if depth == 0 and seen: return m + 1
+                    j += 1
+                m += 1; j = 0
+            return m
     if SEMI_START.match(first) and not (
         '{' in first and (';' not in first or first.index('{') < first.index(';'))
     ):
@@ -79,7 +107,12 @@ def item_end(lines, i):
                 return i + 1
             j += 1
         if term is None and depth == 0 and not seen_block:
-            return i + 1  # ítem de una línea sin bloque (campo, variante unitaria)
+            # ítem sin bloque: campo, variante unitaria… o una expresión encadenada
+            # (`foo(x)\n    .bar()\n    .await?;`) que sigue en la línea siguiente
+            if i + 1 < len(lines) and lines[i + 1].lstrip().startswith('.'):
+                i += 1
+                continue
+            return i + 1
         i += 1
     return i
 

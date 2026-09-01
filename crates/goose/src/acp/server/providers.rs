@@ -1081,9 +1081,6 @@ impl GooseAcpAgent {
                 let provider_id = req.provider_id.clone();
                 let announce: Box<dyn Fn(String, String, u64) + Send + Sync> =
                     Box::new(move |user_code, verification_uri, expires_in| {
-                        let _ = arboard::Clipboard::new()
-                            .ok()
-                            .and_then(|mut cb| cb.set_text(&user_code).ok());
                         if let Err(e) = webbrowser::open(&verification_uri) {
                             tracing::warn!("Failed to open browser: {}", e);
                         }

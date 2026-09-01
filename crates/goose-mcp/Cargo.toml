@@ -14,7 +14,6 @@ workspace = true
 [features]
 default = []
 rustls-tls = []
-native-tls = []
 
 [dependencies]
 rmcp = { workspace = true, features = ["server", "client", "transport-io", "macros"] }

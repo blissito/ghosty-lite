@@ -6,9 +6,6 @@ use std::path::Path;
 #[cfg(feature = "rustls-tls")]
 pub type TlsConfig = axum_server::tls_rustls::RustlsConfig;
 
-#[cfg(feature = "native-tls")]
-pub type TlsConfig = axum_server::tls_openssl::OpenSSLConfig;
-
 pub struct TlsSetup {
     pub config: TlsConfig,
     pub fingerprint: String,
@@ -40,18 +37,6 @@ fn sha256_fingerprint(der: &[u8]) -> String {
             .collect::<Vec<_>>()
             .join(":")
     }
-
-    #[cfg(feature = "native-tls")]
-    {
-        use openssl::hash::MessageDigest;
-        let digest =
-            openssl::hash::hash(MessageDigest::sha256(), der).expect("SHA-256 hash failed");
-        digest
-            .iter()
-            .map(|b| format!("{b:02X}"))
-            .collect::<Vec<_>>()
-            .join(":")
-    }
 }
 
 pub async fn from_pem_files(cert_path: &Path, key_path: &Path) -> Result<TlsSetup> {
@@ -67,9 +52,6 @@ pub async fn from_pem_files(cert_path: &Path, key_path: &Path) -> Result<TlsSetu
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         axum_server::tls_rustls::RustlsConfig::from_pem(cert_pem, key_pem.clone()).await?
     };
-
-    #[cfg(feature = "native-tls")]
-    let config = axum_server::tls_openssl::OpenSSLConfig::from_pem(&cert_pem, &key_pem)?;
 
     Ok(TlsSetup {
         config,
@@ -124,8 +106,6 @@ async fn load_cached_tls() -> Option<TlsSetup> {
     let config = axum_server::tls_rustls::RustlsConfig::from_pem(cert_pem, key_pem)
         .await
         .ok()?;
-    #[cfg(feature = "native-tls")]
-    let config = axum_server::tls_openssl::OpenSSLConfig::from_pem(&cert_pem, &key_pem).ok()?;
 
     Some(TlsSetup {
         config,
@@ -167,10 +147,6 @@ pub async fn self_signed_config() -> Result<TlsSetup> {
         key_pem.into_bytes(),
     )
     .await?;
-
-    #[cfg(feature = "native-tls")]
-    let config =
-        axum_server::tls_openssl::OpenSSLConfig::from_pem(cert_pem.as_bytes(), key_pem.as_bytes())?;
 
     Ok(TlsSetup {
         config,

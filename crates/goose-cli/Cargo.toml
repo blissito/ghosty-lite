@@ -12,19 +12,14 @@ description.workspace = true
 workspace = true
 
 [[bin]]
-name = "goose"
+name = "ghosty"
 path = "src/main.rs"
-
-[[bin]]
-name = "generate_manpages"
-path = "src/bin/generate_manpages.rs"
 
 [[bin]]
 name = "mcp_conformance_driver"
 path = "src/bin/mcp_conformance_driver.rs"
 
 [dependencies]
-clap_mangen = { version = "0.3", default-features = false }
 goose = { path = "../goose", default-features = false }
 goose-mcp = { path = "../goose-mcp", default-features = false }
 goose-providers = { path = "../goose-providers", default-features = false }
@@ -54,9 +49,7 @@ async-trait = { workspace = true }
 base64 = { workspace = true }
 regex = { workspace = true }
 tar = { version = "0.4.46", default-features = false }
-reqwest = { workspace = true, features = ["blocking"] }
-zip = { workspace = true }
-bzip2 = { version = "0.6", default-features = false, features = ["default"] }
+reqwest = { workspace = true }
 webbrowser = { workspace = true }
 indicatif = { version = "0.18", default-features = false }
 tokio-util = { workspace = true, features = ["compat", "rt"] }
@@ -66,9 +59,6 @@ url = { workspace = true }
 urlencoding = { workspace = true }
 clap_complete = { version = "4", default-features = false }
 comfy-table = { version = "8", default-features = false }
-sha2 = { workspace = true }
-sigstore-verify = { version = "0.11", default-features = false, optional = true }
-snap = { workspace = true, optional = true }
 axum.workspace = true
 axum-server = { workspace = true, optional = true }
 clap_complete_nushell = { version = "4", default-features = false }
@@ -92,27 +82,13 @@ code-mode = ["goose/code-mode"]
 aws-providers = ["goose/aws-providers"]
 otel = ["goose/otel"]
 system-keyring = ["goose/system-keyring"]
-update = ["dep:sigstore-verify", "dep:snap"]
-portable-default = ["rustls-tls", "aws-providers", "otel"]
-# disables the update command
-disable-update = []
 rustls-tls = [
     "dep:axum-server",
     "reqwest/rustls",
     "axum-server/tls-rustls",
-    "sigstore-verify?/rustls",
     "goose/rustls-tls",
     "goose-mcp/rustls-tls",
     "goose-providers/rustls-tls",
-]
-native-tls = [
-    "dep:axum-server",
-    "reqwest/native-tls",
-    "axum-server/tls-openssl",
-    "sigstore-verify?/native-tls",
-    "goose/native-tls",
-    "goose-mcp/native-tls",
-    "goose-providers/native-tls",
 ]
 [dev-dependencies]
 env-lock.workspace = true
@@ -124,4 +100,6 @@ tokio = { workspace = true }
 ignored = [
     # Used only in windows
     "winapi",
+    # Sólo para encender reqwest/rustls desde la feature rustls-tls
+    "reqwest",
 ]

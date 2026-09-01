@@ -351,18 +351,13 @@ fn announce_user_action(device: &DeviceCodeResponse) {
         return;
     }
 
-    let copied = arboard::Clipboard::new()
-        .ok()
-        .and_then(|mut cb| cb.set_text(&device.user_code).ok())
-        .is_some();
     if let Err(e) = webbrowser::open(&verify_url) {
         tracing::warn!("Failed to open browser: {}", e);
     }
     // stderr keeps stdout clean for CLI workflows parsing provider output.
-    let clipboard_hint = if copied { " (copied to clipboard)" } else { "" };
     eprintln!(
-        "Please visit {} and enter code {}{}",
-        verify_url, device.user_code, clipboard_hint
+        "Please visit {} and enter code {}",
+        verify_url, device.user_code
     );
 }
 

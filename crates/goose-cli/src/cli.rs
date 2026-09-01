@@ -947,24 +947,6 @@ enum Command {
         command: SchedulerCommand,
     },
 
-    /// Update the goose CLI version
-    #[cfg(feature = "update")]
-    #[command(about = "Update the goose CLI version")]
-    Update {
-        /// Update to canary version
-        #[arg(
-            short,
-            long,
-            help = "Update to canary version",
-            long_help = "Update to the latest canary version of the goose CLI, otherwise updates to the latest stable version."
-        )]
-        canary: bool,
-
-        /// Enforce to re-configure goose during update
-        #[arg(short, long, help = "Enforce to re-configure goose during update")]
-        reconfigure: bool,
-    },
-
     /// Terminal-integrated session (one session per terminal)
     #[command(
         about = "Terminal-integrated goose session",
@@ -1237,8 +1219,6 @@ fn get_command_name(command: &Option<Command>) -> &'static str {
         Some(Command::Session { .. }) => "session",
         Some(Command::Run { .. }) => "run",
         Some(Command::Schedule { .. }) => "schedule",
-        #[cfg(feature = "update")]
-        Some(Command::Update { .. }) => "update",
         Some(Command::Recipe { .. }) => "recipe",
         Some(Command::Skills { .. }) => "skills",
         Some(Command::Plugin { .. }) => "plugin",
@@ -1577,7 +1557,7 @@ async fn handle_serve_command(args: ServeCommandArgs) -> Result<()> {
 
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
     if tls {
-        #[cfg(any(feature = "rustls-tls", feature = "native-tls"))]
+        #[cfg(feature = "rustls-tls")]
         {
             let tls_setup = goose::acp::transport::tls::setup_tls(
                 tls_cert_path.as_deref(),
@@ -1586,23 +1566,17 @@ async fn handle_serve_command(args: ServeCommandArgs) -> Result<()> {
             .await?;
             info!("Starting ACP server on https://{}", addr);
 
-            #[cfg(feature = "rustls-tls")]
             axum_server::bind_rustls(addr, tls_setup.config)
-                .serve(router.into_make_service_with_connect_info::<SocketAddr>())
-                .await?;
-
-            #[cfg(feature = "native-tls")]
-            axum_server::bind_openssl(addr, tls_setup.config)
                 .serve(router.into_make_service_with_connect_info::<SocketAddr>())
                 .await?;
         }
 
-        #[cfg(not(any(feature = "rustls-tls", feature = "native-tls")))]
+        #[cfg(not(feature = "rustls-tls"))]
         {
             let _ = (tls_cert_path, tls_key_path);
             anyhow::bail!(
                 "TLS was requested but no TLS backend is enabled. \
-                 Enable the `rustls-tls` or `native-tls` feature."
+                 Enable the `rustls-tls` feature."
             );
         }
     } else {
@@ -2223,14 +2197,6 @@ pub async fn cli() -> anyhow::Result<()> {
             .await
         }
         Some(Command::Schedule { command }) => handle_schedule_command(command).await,
-        #[cfg(feature = "update")]
-        Some(Command::Update {
-            canary,
-            reconfigure,
-        }) => {
-            crate::commands::update::update(canary, reconfigure).await?;
-            Ok(())
-        }
         Some(Command::Recipe { command }) => handle_recipe_subcommand(command),
         Some(Command::Skills { command }) => handle_skills_subcommand(command).await,
         Some(Command::Plugin { command }) => handle_plugin_subcommand(command),
