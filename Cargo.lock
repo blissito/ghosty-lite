@@ -3972,8 +3972,6 @@ dependencies = [
  "goose-sdk-types",
  "goose-test-support",
  "http 1.5.0",
- "icu_calendar",
- "icu_locale",
  "ignore",
  "image 0.24.9",
  "include_dir",
@@ -10545,15 +10543,8 @@ dependencies = [
 [[package]]
 name = "v8"
 version = "145.0.0"
-dependencies = [
- "v8-goose",
-]
-
-[[package]]
-name = "v8-goose"
-version = "145.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f84468f393984251db025e944544590a8fb429d5088b78102bd72f09232f0da"
+checksum = "61d9a107e16bae35a0be2bb0096ac1d2318aac352c82edd796ab2b9cac66d8f0"
 dependencies = [
  "bindgen",
  "bitflags 2.13.0",
