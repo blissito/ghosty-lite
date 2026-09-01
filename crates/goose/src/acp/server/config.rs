@@ -214,25 +214,6 @@ impl GooseAcpAgent {
                 .data(format!("Provider is not configured: {provider_id}")));
         }
 
-        // Custom/unlisted model entry is always allowed (#7255), matching the CLI
-        // and in-session model-selection paths, so a model that is simply absent
-        // from the provider's (often non-exhaustive) inventory must still be
-        // accepted as the default here. Local inference is the exception: its
-        // models cannot be fetched on demand, so they are validated against the
-        // inventory or the on-disk registry.
-        if provider_id == "local" {
-            if let Some(model_id) = model_id.as_deref() {
-                let model_exists = entry.default_model == model_id
-                    || entry.models.iter().any(|model| model.id == model_id)
-                    || local_inference_model_exists(model_id)?;
-                if !model_exists {
-                    return Err(agent_client_protocol::Error::invalid_params().data(format!(
-                        "Model '{model_id}' is not available for provider '{provider_id}'"
-                    )));
-                }
-            }
-        }
-
         let config = self.config()?;
         let model = model_id.clone().unwrap_or_else(|| {
             crate::config::get_provider_entry(config, &provider_id)
@@ -263,20 +244,6 @@ impl GooseAcpAgent {
     }
 }
 
-fn local_inference_model_exists(model_id: &str) -> Result<bool, agent_client_protocol::Error> {
-    #[cfg(feature = "local-inference")]
-    {
-        crate::providers::local_inference::management::model_exists(model_id)
-            .internal_err_ctx("Failed to read local inference models")
-    }
-
-    #[cfg(not(feature = "local-inference"))]
-    {
-        let _ = model_id;
-        Ok(false)
-    }
-}
-
 struct PreferenceDef {
     key: PreferenceKey,
     config_key: &'static str,
@@ -298,16 +265,6 @@ const PREFERENCE_DEFS: &[PreferenceDef] = &[
         key: PreferenceKey::VoiceAutoSubmitPhrases,
         config_key: "VOICE_AUTO_SUBMIT_PHRASES",
         prepare: prepare_voice_auto_submit_phrases,
-    },
-    PreferenceDef {
-        key: PreferenceKey::VoiceDictationProvider,
-        config_key: "VOICE_DICTATION_PROVIDER",
-        prepare: prepare_voice_dictation_provider,
-    },
-    PreferenceDef {
-        key: PreferenceKey::VoiceDictationPreferredMic,
-        config_key: "VOICE_DICTATION_PREFERRED_MIC",
-        prepare: prepare_voice_dictation_preferred_mic,
     },
 ];
 
@@ -362,50 +319,4 @@ fn prepare_voice_auto_submit_phrases(
     }
 
     Ok(value.clone())
-}
-
-fn prepare_voice_dictation_provider(
-    value: &serde_json::Value,
-) -> Result<serde_json::Value, agent_client_protocol::Error> {
-    let Some(value) = value.as_str() else {
-        return Err(agent_client_protocol::Error::invalid_params()
-            .data("voiceDictationProvider must be a string"));
-    };
-    if !is_supported_voice_dictation_provider(value) {
-        return Err(agent_client_protocol::Error::invalid_params()
-            .data("voiceDictationProvider is not supported"));
-    }
-
-    Ok(serde_json::Value::String(value.to_string()))
-}
-
-fn prepare_voice_dictation_preferred_mic(
-    value: &serde_json::Value,
-) -> Result<serde_json::Value, agent_client_protocol::Error> {
-    let Some(value) = value.as_str() else {
-        return Err(agent_client_protocol::Error::invalid_params()
-            .data("voiceDictationPreferredMic must be a string"));
-    };
-    if value.is_empty() {
-        return Err(agent_client_protocol::Error::invalid_params()
-            .data("voiceDictationPreferredMic must be non-empty"));
-    }
-
-    Ok(serde_json::Value::String(value.to_string()))
-}
-
-fn is_supported_voice_dictation_provider(value: &str) -> bool {
-    matches!(
-        value,
-        "openai" | "groq" | "elevenlabs" | "model" | "__disabled__"
-    ) || {
-        #[cfg(feature = "local-inference")]
-        {
-            value == "local"
-        }
-        #[cfg(not(feature = "local-inference"))]
-        {
-            false
-        }
-    }
 }

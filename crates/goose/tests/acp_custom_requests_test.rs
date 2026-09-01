@@ -741,8 +741,7 @@ fn test_custom_preferences_read_save_remove() {
                 "keys": [
                     "autoCompactThreshold",
                     "gooseThinkingEffort",
-                    "voiceAutoSubmitPhrases",
-                    "voiceDictationPreferredMic"
+                    "voiceAutoSubmitPhrases"
                 ],
             }),
         )
@@ -754,7 +753,6 @@ fn test_custom_preferences_read_save_remove() {
                 { "key": "autoCompactThreshold", "value": 0.7 },
                 { "key": "gooseThinkingEffort", "value": "high" },
                 { "key": "voiceAutoSubmitPhrases", "value": "send it" },
-                { "key": "voiceDictationPreferredMic", "value": null },
             ]))
         );
 
@@ -764,8 +762,8 @@ fn test_custom_preferences_read_save_remove() {
             serde_json::json!({
                 "values": [
                     { "key": "gooseThinkingEffort", "value": "disabled" },
-                    { "key": "voiceDictationProvider", "value": "__disabled__" },
-                    { "key": "voiceDictationPreferredMic", "value": "mic-1" }
+                    { "key": "autoCompactThreshold", "value": 0.5 },
+                    { "key": "voiceAutoSubmitPhrases", "value": "go" }
                 ],
             }),
         )
@@ -776,7 +774,7 @@ fn test_custom_preferences_read_save_remove() {
             conn.cx(),
             "_goose/unstable/preferences/remove",
             serde_json::json!({
-                "keys": ["voiceDictationProvider"],
+                "keys": ["autoCompactThreshold"],
             }),
         )
         .await
@@ -786,7 +784,7 @@ fn test_custom_preferences_read_save_remove() {
             conn.cx(),
             "_goose/unstable/preferences/read",
             serde_json::json!({
-                "keys": ["gooseThinkingEffort", "voiceDictationProvider", "voiceDictationPreferredMic"],
+                "keys": ["gooseThinkingEffort", "autoCompactThreshold", "voiceAutoSubmitPhrases"],
             }),
         )
         .await
@@ -795,8 +793,8 @@ fn test_custom_preferences_read_save_remove() {
             response.get("values"),
             Some(&serde_json::json!([
                 { "key": "gooseThinkingEffort", "value": "off" },
-                { "key": "voiceDictationProvider", "value": null },
-                { "key": "voiceDictationPreferredMic", "value": "mic-1" },
+                { "key": "autoCompactThreshold", "value": null },
+                { "key": "voiceAutoSubmitPhrases", "value": "go" },
             ]))
         );
     });
@@ -826,12 +824,6 @@ fn test_custom_preferences_save_rejects_invalid_values() {
             serde_json::json!({
                 "values": [{ "key": "voiceAutoSubmitPhrases", "value": ["send"] }],
             }),
-            serde_json::json!({
-                "values": [{ "key": "voiceDictationProvider", "value": "bogus" }],
-            }),
-            serde_json::json!({
-                "values": [{ "key": "voiceDictationPreferredMic", "value": "" }],
-            }),
         ];
 
         for payload in invalid_payloads {
@@ -844,8 +836,8 @@ fn test_custom_preferences_save_rejects_invalid_values() {
             "_goose/unstable/preferences/save",
             serde_json::json!({
                 "values": [
-                    { "key": "voiceDictationPreferredMic", "value": "mic-1" },
-                    { "key": "voiceDictationProvider", "value": "bogus" }
+                    { "key": "voiceAutoSubmitPhrases", "value": "send" },
+                    { "key": "gooseThinkingEffort", "value": "bogus" }
                 ],
             }),
         )
@@ -856,7 +848,7 @@ fn test_custom_preferences_save_rejects_invalid_values() {
             conn.cx(),
             "_goose/unstable/preferences/read",
             serde_json::json!({
-                "keys": ["voiceDictationPreferredMic"],
+                "keys": ["voiceAutoSubmitPhrases"],
             }),
         )
         .await
@@ -864,7 +856,7 @@ fn test_custom_preferences_save_rejects_invalid_values() {
         assert_eq!(
             response.get("values"),
             Some(&serde_json::json!([
-                { "key": "voiceDictationPreferredMic", "value": null },
+                { "key": "voiceAutoSubmitPhrases", "value": null },
             ]))
         );
     });
@@ -939,104 +931,6 @@ fn test_custom_defaults_save_allows_unlisted_model() {
                 "providerId": "anthropic",
                 "modelId": "custom-unlisted-model",
             })
-        );
-    });
-}
-
-#[test]
-#[serial]
-fn test_custom_dictation_secret_save_delete() {
-    let _env = env_lock::lock_env([
-        ("GOOSE_DISABLE_KEYRING", Some("1")),
-        ("GROQ_API_KEY", None::<&str>),
-    ]);
-    let config_dir = write_acp_global_config(
-        "GOOSE_MODEL: gpt-4o\nGOOSE_PROVIDER: openai\nGOOSE_DISABLE_KEYRING: true\n",
-    );
-
-    run_test(async move {
-        let openai = OpenAiFixture::new(vec![], Arc::new(EnforceSessionId::default())).await;
-        let config = TestConnectionConfig {
-            data_root: config_dir.clone(),
-            ..Default::default()
-        };
-        let conn = AcpServerConnection::new(config, openai).await;
-
-        send_custom(
-            conn.cx(),
-            "_goose/unstable/dictation/secret/save",
-            serde_json::json!({
-                "provider": "groq",
-                "value": "groq-key",
-            }),
-        )
-        .await
-        .expect("dictation secret save should succeed");
-
-        let config = send_custom(
-            conn.cx(),
-            "_goose/unstable/dictation/config",
-            serde_json::json!({}),
-        )
-        .await
-        .expect("dictation config should succeed");
-        assert_eq!(
-            config
-                .pointer("/providers/groq/configured")
-                .and_then(|value| value.as_bool()),
-            Some(true)
-        );
-
-        let provider_config_result = send_custom(
-            conn.cx(),
-            "_goose/unstable/dictation/secret/save",
-            serde_json::json!({
-                "provider": "openai",
-                "value": "openai-key",
-            }),
-        )
-        .await;
-        assert!(
-            provider_config_result.is_err(),
-            "provider-config dictation providers should be rejected"
-        );
-
-        let unknown_result = send_custom(
-            conn.cx(),
-            "_goose/unstable/dictation/secret/save",
-            serde_json::json!({
-                "provider": "unknown",
-                "value": "key",
-            }),
-        )
-        .await;
-        assert!(
-            unknown_result.is_err(),
-            "unknown provider should be rejected"
-        );
-
-        send_custom(
-            conn.cx(),
-            "_goose/unstable/dictation/secret/delete",
-            serde_json::json!({
-                "provider": "groq",
-            }),
-        )
-        .await
-        .expect("dictation secret delete should succeed");
-
-        let config = send_custom(
-            conn.cx(),
-            "_goose/unstable/dictation/config",
-            serde_json::json!({}),
-        )
-        .await
-        .expect("dictation config should succeed");
-        assert_eq!(
-            config
-                .pointer("/providers/groq/configured")
-                .and_then(|value| value.as_bool()),
-            Some(false)
         );
     });
 }

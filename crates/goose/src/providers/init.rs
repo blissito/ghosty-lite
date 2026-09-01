@@ -3,8 +3,6 @@ use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "aws-providers")]
 use super::bedrock::BedrockProvider;
-#[cfg(feature = "local-inference")]
-use super::local_inference::LocalInferenceProvider;
 #[cfg(feature = "aws-providers")]
 use super::sagemaker_tgi::SageMakerTgiProvider;
 use super::{
@@ -77,8 +75,6 @@ async fn init_registry() -> RwLock<ProviderRegistry> {
         );
         #[cfg(feature = "aws-providers")]
         registry.register::<BedrockProvider>(false);
-        #[cfg(feature = "local-inference")]
-        registry.register::<LocalInferenceProvider>(false);
         registry.register_with_inventory::<ChatGptCodexProvider>(
             true,
             Some(registrations::chatgpt_codex_inventory()),

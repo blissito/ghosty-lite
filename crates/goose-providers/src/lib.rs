@@ -11,8 +11,6 @@ pub use goose_provider_types::{
 };
 pub mod declarative;
 pub mod http_status;
-#[cfg(feature = "local-inference")]
-pub mod local_inference;
 pub mod ollama;
 pub mod openai;
 pub mod openai_compatible;

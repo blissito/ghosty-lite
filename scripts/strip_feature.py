@@ -45,7 +45,9 @@ def item_end(lines, i):
     first = lines[i]
     col = 0  # columna desde la que se cuentan los delimitadores en la primera línea
     arrow = arm_arrow(first)
-    if SEMI_START.match(first):
+    if SEMI_START.match(first) and not (
+        '{' in first and (';' not in first or first.index('{') < first.index(';'))
+    ):
         term = ';'
     elif arrow is not None:
         # brazo de match: lo que hay antes de `=>` (patrón) no cuenta

@@ -99,14 +99,12 @@ mod apps;
 mod config;
 mod custom_dispatch;
 mod diagnostics;
-mod dictation;
 mod dispatch;
 mod elicitation;
 mod extensions;
 mod fork_session;
 mod list_sessions;
 mod load_session;
-mod local_inference;
 mod manage_sessions;
 mod message_meta;
 mod new_session;
@@ -380,9 +378,6 @@ fn meta_string(
 fn agent_capabilities_meta() -> Option<Meta> {
     let mut goose = serde_json::Map::new();
     goose.insert("recipeParameterScopes".to_string(), serde_json::json!({}));
-    if cfg!(feature = "local-inference") {
-        goose.insert("localInference".to_string(), serde_json::json!({}));
-    }
 
     let mut meta = serde_json::Map::new();
     meta.insert("goose".to_string(), serde_json::Value::Object(goose));
@@ -1685,23 +1680,6 @@ fn send_status_message_update(
     Ok(())
 }
 
-fn send_progress_message_update(
-    cx: &ConnectionTo<Client>,
-    supports_goose_custom_notifications: bool,
-    session_id: &str,
-    message: String,
-) -> Result<(), agent_client_protocol::Error> {
-    if supports_goose_custom_notifications {
-        cx.send_notification(GooseSessionNotification {
-            session_id: session_id.to_string(),
-            update: GooseSessionUpdate::StatusMessage(StatusMessageUpdate {
-                status: StatusMessage::Progress { message },
-            }),
-        })?;
-    }
-    Ok(())
-}
-
 fn status_message_from_system_notification(
     notification: &SystemNotificationContent,
 ) -> Option<StatusMessage> {
@@ -2000,44 +1978,6 @@ impl GooseAcpAgent {
         ))
     }
 
-    async fn send_local_inference_progress_update(
-        &self,
-        cx: &ConnectionTo<Client>,
-        acp_session_id: &SessionId,
-        session_id: &str,
-        agent: &Arc<Agent>,
-    ) -> Result<(), agent_client_protocol::Error> {
-        let Ok(provider) = agent.provider().await else {
-            return Ok(());
-        };
-        if provider.get_name() != "local" {
-            return Ok(());
-        }
-
-        let model_config = agent.model_config_for_session(session_id).await.ok();
-        let model_name = model_config
-            .as_ref()
-            .map(|config| config.model_name.clone())
-            .unwrap_or_else(|| "local model".to_string());
-
-        #[cfg(feature = "local-inference")]
-        if let Some(model_config) = model_config.as_ref() {
-            if crate::providers::local_inference::is_model_loaded(&model_config.model_name)
-                .await
-                .unwrap_or(false)
-            {
-                return Ok(());
-            }
-        }
-
-        send_progress_message_update(
-            cx,
-            self.supports_goose_custom_notifications(),
-            acp_session_id.0.as_ref(),
-            format!("Loading local model {model_name}..."),
-        )
-    }
-
     async fn on_load_session(
         &self,
         cx: &ConnectionTo<Client>,
@@ -2087,15 +2027,6 @@ impl GooseAcpAgent {
 
         if let Err(error) = Self::send_active_run_update(cx, &args.session_id, Some(&run_id)) {
             self.clear_active_run(&session_id, &run_id).await;
-            return Err(error);
-        }
-
-        if let Err(error) = self
-            .send_local_inference_progress_update(cx, &args.session_id, &session_id, &agent)
-            .await
-        {
-            self.clear_active_run(&session_id, &run_id).await;
-            let _ = Self::send_active_run_update(cx, &args.session_id, None);
             return Err(error);
         }
 

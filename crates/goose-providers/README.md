@@ -17,7 +17,6 @@ providers, and on the types crate when you only need the contract.
 | `azure_foundry` | Azure AI Foundry |
 | `snowflake` | Snowflake Cortex |
 | `ollama` | Ollama |
-| `local_inference` | On-device models (requires `local-inference`) |
 
 ## Declarative providers
 
@@ -43,7 +42,6 @@ cargo run -p goose-providers --example streaming
 Default is `[]`.
 
 - **TLS (pick one):** `rustls-tls` or `native-tls`.
-- `local-inference` — pulls in [`goose-local-inference`](../goose-local-inference);
   `cuda`, `vulkan`, `mlx` select an accelerator and imply it.
 
 ## Shared plumbing

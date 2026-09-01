@@ -109,45 +109,6 @@ fn acp_secret_mutations_and_inventory_refresh_invalidate_global_secret_cache() {
         };
         let conn = AcpServerConnection::new(config, openai).await;
 
-        write_secrets(&config_dir, "GROQ_API_KEY: fresh-key\n");
-        send_custom(
-            conn.cx(),
-            "_goose/unstable/dictation/secret/save",
-            serde_json::json!({
-                "provider": "groq",
-                "value": "fresh-key",
-            }),
-        )
-        .await
-        .expect("dictation secret save should succeed");
-
-        assert_eq!(
-            Config::global()
-                .get_secret::<String>("GROQ_API_KEY")
-                .unwrap(),
-            "fresh-key",
-            "ACP dictation secret save should invalidate the global secrets cache"
-        );
-
-        write_secrets(&config_dir, "{}\n");
-        send_custom(
-            conn.cx(),
-            "_goose/unstable/dictation/secret/delete",
-            serde_json::json!({
-                "provider": "groq",
-            }),
-        )
-        .await
-        .expect("dictation secret delete should succeed");
-
-        assert!(
-            matches!(
-                Config::global().get_secret::<String>("GROQ_API_KEY"),
-                Err(ConfigError::NotFound(_))
-            ),
-            "ACP dictation secret delete should invalidate the global secrets cache"
-        );
-
         let save_provider_config = send_custom(
             conn.cx(),
             "_goose/unstable/providers/config/save",
