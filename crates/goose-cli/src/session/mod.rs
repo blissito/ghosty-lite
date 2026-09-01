@@ -65,7 +65,7 @@ use tokio;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-const GOOSE_PLANNER_CONTEXT_LIMIT: &str = "GOOSE_PLANNER_CONTEXT_LIMIT";
+const GHOSTY_PLANNER_CONTEXT_LIMIT: &str = "GHOSTY_PLANNER_CONTEXT_LIMIT";
 const SHELL_STATUS_FALLBACK_WIDTH: usize = 120;
 const SHELL_STATUS_MAX_LINES: usize = 3;
 const SHELL_STATUS_RESERVED_WIDTH: usize = 2;
@@ -917,7 +917,7 @@ impl CliSession {
             }
         };
         self.agent.update_goose_mode(mode, &self.session_id).await?;
-        config.set_goose_mode(mode)?;
+        config.set_ghosty_mode(mode)?;
         output::goose_mode_message(&format!("Goose mode set to '{mode}'"));
         Ok(())
     }
@@ -1014,7 +1014,7 @@ impl CliSession {
             &current_model_config,
         )?;
 
-        let configured_effort = Config::global().get_goose_thinking_effort();
+        let configured_effort = Config::global().get_ghosty_thinking_effort();
         let new_effort = new_model_config.thinking_effort().or(configured_effort);
         let current_effort = current_model_config.thinking_effort().or(configured_effort);
         let provider_unchanged = target_provider_name == current_provider_name;
@@ -1431,9 +1431,9 @@ impl CliSession {
                     self.run_mode = RunMode::Normal;
                     // set goose mode: auto if that isn't already the case
                     let config = Config::global();
-                    let curr_goose_mode = config.get_goose_mode().unwrap_or_default();
+                    let curr_goose_mode = config.get_ghosty_mode().unwrap_or_default();
                     if curr_goose_mode != GooseMode::Auto {
-                        config.set_goose_mode(GooseMode::Auto).unwrap();
+                        config.set_ghosty_mode(GooseMode::Auto).unwrap();
                     }
 
                     // clear the messages before acting on the plan
@@ -1449,7 +1449,7 @@ impl CliSession {
 
                     // Reset run & goose mode
                     if curr_goose_mode != GooseMode::Auto {
-                        config.set_goose_mode(curr_goose_mode)?;
+                        config.set_ghosty_mode(curr_goose_mode)?;
                     }
                 } else {
                     // add the plan response (assistant message) & carry the conversation forward
@@ -1542,7 +1542,7 @@ impl CliSession {
                                     // Approve/SmartApprove modes since auto-allowing would
                                     // bypass the safety contract those modes are meant to enforce.
                                     let config = Config::global();
-                                    let goose_mode = config.get_goose_mode().unwrap_or(GooseMode::Auto);
+                                    let goose_mode = config.get_ghosty_mode().unwrap_or(GooseMode::Auto);
                                     if goose_mode == GooseMode::Approve || goose_mode == GooseMode::SmartApprove {
                                         cancel_token_clone.cancel();
                                         drop(stream);
@@ -2009,11 +2009,11 @@ impl CliSession {
 
         let config = Config::global();
         let show_cost = config
-            .get_param::<bool>("GOOSE_CLI_SHOW_COST")
+            .get_param::<bool>("GHOSTY_CLI_SHOW_COST")
             .unwrap_or(false);
 
         let provider_name = config
-            .get_goose_provider()
+            .get_ghosty_provider()
             .unwrap_or_else(|_| "unknown".to_string());
 
         match self.get_session().await {
@@ -2577,7 +2577,7 @@ fn format_logging_notification(
                     Some("response_generated") => {
                         let config = Config::global();
                         let min_priority = config
-                            .get_param::<f32>("GOOSE_CLI_MIN_PRIORITY")
+                            .get_param::<f32>("GHOSTY_CLI_MIN_PRIORITY")
                             .ok()
                             .unwrap_or(output::DEFAULT_MIN_PRIORITY);
 
@@ -2643,7 +2643,7 @@ fn display_log_notification(
         } else if ntype == "shell_output" {
             let config = Config::global();
             let min_priority = config
-                .get_param::<f32>("GOOSE_CLI_MIN_PRIORITY")
+                .get_param::<f32>("GHOSTY_CLI_MIN_PRIORITY")
                 .ok()
                 .unwrap_or(output::DEFAULT_MIN_PRIORITY);
 
@@ -2750,32 +2750,32 @@ async fn get_reasoner(
     let config = Config::global();
 
     // Try planner-specific provider first, fall back to default provider
-    let provider = if let Ok(provider) = config.get_param::<String>("GOOSE_PLANNER_PROVIDER") {
+    let provider = if let Ok(provider) = config.get_param::<String>("GHOSTY_PLANNER_PROVIDER") {
         provider
     } else {
-        println!("WARNING: GOOSE_PLANNER_PROVIDER not found. Using default provider...");
+        println!("WARNING: GHOSTY_PLANNER_PROVIDER not found. Using default provider...");
         config
-            .get_goose_provider()
+            .get_ghosty_provider()
             .expect("No provider configured. Run 'goose configure' first")
     };
 
     // Try planner-specific model first, fall back to default model
-    let model = if let Ok(model) = config.get_param::<String>("GOOSE_PLANNER_MODEL") {
+    let model = if let Ok(model) = config.get_param::<String>("GHOSTY_PLANNER_MODEL") {
         model
     } else {
-        println!("WARNING: GOOSE_PLANNER_MODEL not found. Using default model...");
+        println!("WARNING: GHOSTY_PLANNER_MODEL not found. Using default model...");
         config
-            .get_goose_model()
+            .get_ghosty_model()
             .expect("No model configured. Run 'goose configure' first")
     };
 
-    let planner_context_limit = match env::var(GOOSE_PLANNER_CONTEXT_LIMIT)
+    let planner_context_limit = match env::var(GHOSTY_PLANNER_CONTEXT_LIMIT)
         .ok()
         .map(|v| v.parse::<usize>())
     {
         Some(Ok(n)) if n >= 4096 => Some(n),
-        Some(Ok(_)) => anyhow::bail!("{} must be at least 4096", GOOSE_PLANNER_CONTEXT_LIMIT),
-        Some(Err(e)) => anyhow::bail!("{}: {}", GOOSE_PLANNER_CONTEXT_LIMIT, e),
+        Some(Ok(_)) => anyhow::bail!("{} must be at least 4096", GHOSTY_PLANNER_CONTEXT_LIMIT),
+        Some(Err(e)) => anyhow::bail!("{}: {}", GHOSTY_PLANNER_CONTEXT_LIMIT, e),
         None => None,
     };
 
@@ -3089,11 +3089,11 @@ mod tests {
     #[test]
     fn test_build_switched_model_config_rebuilds_target_model_settings() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_MAX_TOKENS", None::<&str>),
-            ("GOOSE_TEMPERATURE", None::<&str>),
-            ("GOOSE_CONTEXT_LIMIT", None::<&str>),
-            ("GOOSE_TOOLSHIM", None::<&str>),
-            ("GOOSE_TOOLSHIM_OLLAMA_MODEL", None::<&str>),
+            ("GHOSTY_MAX_TOKENS", None::<&str>),
+            ("GHOSTY_TEMPERATURE", None::<&str>),
+            ("GHOSTY_CONTEXT_LIMIT", None::<&str>),
+            ("GHOSTY_TOOLSHIM", None::<&str>),
+            ("GHOSTY_TOOLSHIM_OLLAMA_MODEL", None::<&str>),
         ]);
 
         let current_model_config = goose_providers::model::ModelConfig {
@@ -3133,12 +3133,12 @@ mod tests {
     #[test]
     fn test_build_switched_model_config_detects_effort_suffix_change() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_MAX_TOKENS", None::<&str>),
-            ("GOOSE_TEMPERATURE", None::<&str>),
-            ("GOOSE_CONTEXT_LIMIT", None::<&str>),
-            ("GOOSE_TOOLSHIM", None::<&str>),
-            ("GOOSE_TOOLSHIM_OLLAMA_MODEL", None::<&str>),
-            ("GOOSE_THINKING_EFFORT", None::<&str>),
+            ("GHOSTY_MAX_TOKENS", None::<&str>),
+            ("GHOSTY_TEMPERATURE", None::<&str>),
+            ("GHOSTY_CONTEXT_LIMIT", None::<&str>),
+            ("GHOSTY_TOOLSHIM", None::<&str>),
+            ("GHOSTY_TOOLSHIM_OLLAMA_MODEL", None::<&str>),
+            ("GHOSTY_THINKING_EFFORT", None::<&str>),
         ]);
 
         let current = goose_providers::model::ModelConfig::new("gpt-5.4-high")

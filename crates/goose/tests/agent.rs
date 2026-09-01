@@ -956,7 +956,7 @@ mod tests {
             // Set a low cutoff so we don't need hundreds of tool pairs.
             // cutoff=2 means we need >2+10=12 visible tool pairs to trigger.
             Config::global()
-                .set_param("GOOSE_TOOL_CALL_CUTOFF", 2)
+                .set_param("GHOSTY_TOOL_CALL_CUTOFF", 2)
                 .unwrap();
 
             let temp_dir = tempfile::tempdir()?;
@@ -1109,7 +1109,7 @@ mod tests {
             );
 
             // Clean up the config override
-            Config::global().delete("GOOSE_TOOL_CALL_CUTOFF").unwrap();
+            Config::global().delete("GHOSTY_TOOL_CALL_CUTOFF").unwrap();
 
             Ok(())
         }
@@ -3598,7 +3598,7 @@ mod tests {
         async fn legacy_structured_output_fails_before_provider_inference() -> Result<()> {
             use goose::recipe::Response;
 
-            let _guard = env_lock::lock_env([("GOOSE_STATE_MACHINE", None::<&str>)]);
+            let _guard = env_lock::lock_env([("GHOSTY_STATE_MACHINE", None::<&str>)]);
             let agent = Agent::new();
             let session = agent
                 .config

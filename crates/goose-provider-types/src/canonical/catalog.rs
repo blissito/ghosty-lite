@@ -307,7 +307,8 @@ impl ProviderSetupMetadata {
 
 fn field_label(key: &str) -> String {
     let label = key
-        .strip_prefix("GOOSE_")
+        .strip_prefix("GHOSTY_")
+        .or_else(|| key.strip_prefix("GOOSE_"))
         .unwrap_or(key)
         .replace('_', " ")
         .to_lowercase();

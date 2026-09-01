@@ -151,7 +151,7 @@ impl OrchestratorClient {
         }
 
         let model_name = Config::global()
-            .get_goose_model()
+            .get_ghosty_model()
             .map_err(|_| "Could not resolve model config: missing model".to_string())?;
         crate::model_config::model_config_from_user_config(provider_name, &model_name)
             .map_err(|e| format!("Could not resolve model config: {e}"))

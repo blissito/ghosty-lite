@@ -134,7 +134,7 @@ impl CodexProvider {
         std::fs::create_dir_all(&image_dir).ok();
         let (prompt, temp_files) = prepare_input(system, messages, &image_dir)?;
 
-        if std::env::var("GOOSE_CODEX_DEBUG").is_ok() {
+        if std::env::var("GHOSTY_CODEX_DEBUG").is_ok() {
             let reasoning_effort =
                 Self::map_thinking_effort(&model.model_name, model.thinking_effort());
             println!("=== CODEX PROVIDER DEBUG ===");
@@ -162,7 +162,7 @@ impl CodexProvider {
         cmd.arg("exec");
 
         // Only pass model parameter if it's in the known models list
-        // This allows users to set GOOSE_PROVIDER=codex without needing to specify a model
+        // This allows users to set GHOSTY_PROVIDER=codex without needing to specify a model
         if CODEX_KNOWN_MODELS.contains(&model.model_name.as_str()) {
             cmd.arg("-m").arg(&model.model_name);
         }
@@ -1274,7 +1274,7 @@ mod tests {
 
         let _guard = env_lock::lock_env([
             ("CODEX_REASONING_EFFORT", None::<&str>),
-            ("GOOSE_THINKING_EFFORT", None::<&str>),
+            ("GHOSTY_THINKING_EFFORT", None::<&str>),
         ]);
 
         assert_eq!(
@@ -1299,7 +1299,7 @@ mod tests {
     fn test_map_thinking_effort_uses_legacy_codex_env() {
         let _guard = env_lock::lock_env([
             ("CODEX_REASONING_EFFORT", Some("low")),
-            ("GOOSE_THINKING_EFFORT", None::<&str>),
+            ("GHOSTY_THINKING_EFFORT", None::<&str>),
         ]);
 
         assert_eq!(

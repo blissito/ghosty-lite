@@ -54,7 +54,7 @@ const OLLAMA_MAX_RETRY_INTERVAL_MS: u64 = 15_000;
 /// explicit at the construction boundary.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct OllamaOptions {
-    /// Explicit context window override from `GOOSE_INPUT_LIMIT`.
+    /// Explicit context window override from `GHOSTY_INPUT_LIMIT`.
     /// `None` when unset, zero, or invalid; the model's context limit is then
     /// used as the fallback.
     pub input_limit: Option<usize>,
@@ -62,7 +62,7 @@ pub struct OllamaOptions {
     /// default `true`).
     pub stream_usage: bool,
     /// Per-chunk stream timeout in seconds, resolved from
-    /// `OLLAMA_STREAM_TIMEOUT` > `GOOSE_STREAM_TIMEOUT` > `OLLAMA_TIMEOUT` >
+    /// `OLLAMA_STREAM_TIMEOUT` > `GHOSTY_STREAM_TIMEOUT` > `OLLAMA_TIMEOUT` >
     /// default (120s).
     pub chunk_timeout_secs: u64,
 }
@@ -465,7 +465,7 @@ impl Provider for OllamaProvider {
 }
 
 /// Default per-chunk timeout for Ollama streaming responses (seconds).
-/// Configurable via OLLAMA_STREAM_TIMEOUT, GOOSE_STREAM_TIMEOUT, or falls back
+/// Configurable via OLLAMA_STREAM_TIMEOUT, GHOSTY_STREAM_TIMEOUT, or falls back
 /// to OLLAMA_TIMEOUT. Set high to accommodate slower models (CPU inference,
 /// large parameter counts, complex reasoning).
 pub const OLLAMA_DEFAULT_CHUNK_TIMEOUT_SECS: u64 = 120;
@@ -496,7 +496,7 @@ fn with_line_timeout(
                         "Ollama stream stalled: no data received for {}s. \
                          This may indicate the model is overwhelmed by the request payload. \
                          Try a smaller model, reduce the number of tools, or increase the \
-                         timeout via OLLAMA_STREAM_TIMEOUT, GOOSE_STREAM_TIMEOUT, or \
+                         timeout via OLLAMA_STREAM_TIMEOUT, GHOSTY_STREAM_TIMEOUT, or \
                          OLLAMA_TIMEOUT in your config.",
                         timeout_secs
                     ))?;

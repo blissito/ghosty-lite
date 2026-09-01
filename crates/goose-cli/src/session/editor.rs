@@ -11,10 +11,10 @@ use tempfile::Builder;
 use tempfile::NamedTempFile;
 
 /// Resolve the editor command from config and environment variables.
-/// Checks GOOSE_PROMPT_EDITOR, then $VISUAL, then $EDITOR.
+/// Checks GHOSTY_PROMPT_EDITOR, then $VISUAL, then $EDITOR.
 pub fn resolve_editor_command() -> Option<String> {
     let config = Config::global();
-    let config_editor = config.get_goose_prompt_editor().ok().flatten();
+    let config_editor = config.get_ghosty_prompt_editor().ok().flatten();
     let visual = std::env::var("VISUAL").ok();
     let editor_env = std::env::var("EDITOR").ok();
     resolve_editor_from_sources(
@@ -40,7 +40,7 @@ fn resolve_editor_from_sources(
 /// Resolve the editor command, falling back to vi (or notepad on Windows).
 pub fn resolve_editor_or_default() -> String {
     let config = Config::global();
-    let config_editor = config.get_goose_prompt_editor().ok().flatten();
+    let config_editor = config.get_ghosty_prompt_editor().ok().flatten();
     let visual = std::env::var("VISUAL").ok();
     let editor_env = std::env::var("EDITOR").ok();
     resolve_editor_or_default_from_sources(

@@ -97,8 +97,8 @@ list_available_migrations() {
 }
 
 get_goose_db_path() {
-    if [[ -n "${GOOSE_PATH_ROOT:-}" ]]; then
-        echo "${GOOSE_PATH_ROOT}/data/sessions/sessions.db"
+    if [[ -n "${GHOSTY_PATH_ROOT:-}" ]]; then
+        echo "${GHOSTY_PATH_ROOT}/data/sessions/sessions.db"
     else
         local possible_paths=(
             "${HOME}/.local/share/goose/sessions/sessions.db"

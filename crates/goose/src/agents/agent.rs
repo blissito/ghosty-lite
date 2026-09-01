@@ -116,7 +116,7 @@ fn normalize_legacy_provider_thinking_effort(
     if let Some(params) = model_config.request_params.as_mut() {
         params.remove("thinking_effort");
     }
-    model_config.with_default_thinking_effort(Config::global().get_goose_thinking_effort())
+    model_config.with_default_thinking_effort(Config::global().get_ghosty_thinking_effort())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,7 +173,7 @@ pub(crate) fn stop_hook_block_cap_warning(plugin: &str, cap: u32) -> Message {
     Message::assistant().with_system_notification(
         SystemNotificationType::InlineMessage,
         format!(
-            "Stop hook `{plugin}` blocked the turn from ending more than {cap} consecutive times — overriding and ending turn to avoid an infinite loop. Set GOOSE_STOP_HOOK_BLOCK_CAP to raise this limit."
+            "Stop hook `{plugin}` blocked the turn from ending more than {cap} consecutive times — overriding and ending turn to avoid an infinite loop. Set GHOSTY_STOP_HOOK_BLOCK_CAP to raise this limit."
         ),
     )
 }
@@ -398,8 +398,8 @@ impl Agent {
             Arc::new(SessionManager::instance()),
             PermissionManager::instance(),
             None,
-            config.get_goose_mode().unwrap_or_default(),
-            config.get_goose_disable_session_naming().unwrap_or(false),
+            config.get_ghosty_mode().unwrap_or_default(),
+            config.get_ghosty_disable_session_naming().unwrap_or(false),
             GoosePlatform::GooseCli,
         ))
     }
@@ -498,7 +498,7 @@ impl Agent {
         }
 
         Config::global()
-            .get_param::<u32>("GOOSE_STOP_HOOK_BLOCK_CAP")
+            .get_param::<u32>("GHOSTY_STOP_HOOK_BLOCK_CAP")
             .unwrap_or(DEFAULT_STOP_HOOK_BLOCK_CAP)
     }
 
@@ -875,7 +875,7 @@ impl Agent {
 
         let goose_mode = *self.current_goose_mode.lock().await;
 
-        let tool_call_cut_off = match Config::global().get_param::<usize>("GOOSE_TOOL_CALL_CUTOFF")
+        let tool_call_cut_off = match Config::global().get_param::<usize>("GHOSTY_TOOL_CALL_CUTOFF")
         {
             Ok(v) => v,
             Err(_) => {
@@ -887,7 +887,7 @@ impl Agent {
                     Err(_) => goose_providers::model::DEFAULT_CONTEXT_LIMIT,
                 };
                 let compaction_threshold = Config::global()
-                    .get_param::<f64>("GOOSE_AUTO_COMPACT_THRESHOLD")
+                    .get_param::<f64>("GHOSTY_AUTO_COMPACT_THRESHOLD")
                     .unwrap_or(crate::context_mgmt::DEFAULT_COMPACTION_THRESHOLD);
                 crate::context_mgmt::compute_tool_call_cutoff(context_limit, compaction_threshold)
             }
@@ -1017,10 +1017,10 @@ impl Agent {
 
         let config = Config::global();
         let provider_name = config
-            .get_goose_provider()
+            .get_ghosty_provider()
             .map_err(|_| anyhow!("Could not resolve model config: missing provider"))?;
         let model_name = config
-            .get_goose_model()
+            .get_ghosty_model()
             .map_err(|_| anyhow!("Could not resolve model config: missing model"))?;
         crate::model_config::model_config_from_user_config(&provider_name, &model_name)
             .map_err(|e| anyhow!("Could not resolve model config: {e}"))
@@ -1662,30 +1662,30 @@ impl Agent {
     ) -> StateMachine<'_, Session, GooseEffect> {
         let max_turns = max_turns.unwrap_or_else(|| {
             Config::global()
-                .get_param::<u32>("GOOSE_MAX_TURNS")
+                .get_param::<u32>("GHOSTY_MAX_TURNS")
                 .unwrap_or(DEFAULT_MAX_TURNS)
         });
         let retry_timeout = Config::global()
-            .get_param::<u64>("GOOSE_RECIPE_RETRY_TIMEOUT_SECONDS")
+            .get_param::<u64>("GHOSTY_RECIPE_RETRY_TIMEOUT_SECONDS")
             .unwrap_or(DEFAULT_RETRY_TIMEOUT_SECONDS);
         let on_failure_timeout = Config::global()
-            .get_param::<u64>("GOOSE_RECIPE_ON_FAILURE_TIMEOUT_SECONDS")
+            .get_param::<u64>("GHOSTY_RECIPE_ON_FAILURE_TIMEOUT_SECONDS")
             .unwrap_or(DEFAULT_ON_FAILURE_TIMEOUT_SECONDS);
         #[cfg(test)]
         let stop_hook_block_cap = self.stop_hook_block_cap_override.unwrap_or_else(|| {
             Config::global()
-                .get_param::<u32>("GOOSE_STOP_HOOK_BLOCK_CAP")
+                .get_param::<u32>("GHOSTY_STOP_HOOK_BLOCK_CAP")
                 .unwrap_or(DEFAULT_STOP_HOOK_BLOCK_CAP)
         });
         #[cfg(not(test))]
         let stop_hook_block_cap = Config::global()
-            .get_param::<u32>("GOOSE_STOP_HOOK_BLOCK_CAP")
+            .get_param::<u32>("GHOSTY_STOP_HOOK_BLOCK_CAP")
             .unwrap_or(DEFAULT_STOP_HOOK_BLOCK_CAP);
         let compaction_threshold = Config::global()
-            .get_param::<f64>("GOOSE_AUTO_COMPACT_THRESHOLD")
+            .get_param::<f64>("GHOSTY_AUTO_COMPACT_THRESHOLD")
             .unwrap_or(DEFAULT_COMPACTION_THRESHOLD);
         let tool_call_cutoff = Config::global()
-            .get_param::<usize>("GOOSE_TOOL_CALL_CUTOFF")
+            .get_param::<usize>("GHOSTY_TOOL_CALL_CUTOFF")
             .unwrap_or_else(|_| {
                 crate::context_mgmt::compute_tool_call_cutoff(context_limit, compaction_threshold)
             });
@@ -1825,10 +1825,10 @@ impl Agent {
             Some(model_config) => model_config,
             None => {
                 let provider_name = Config::global()
-                    .get_goose_provider()
+                    .get_ghosty_provider()
                     .map_err(|_| anyhow!("Could not resolve model config: missing provider"))?;
                 let model_name = Config::global()
-                    .get_goose_model()
+                    .get_ghosty_model()
                     .map_err(|_| anyhow!("Could not resolve model config: missing model"))?;
                 crate::model_config::model_config_from_user_config(&provider_name, &model_name)
                     .map_err(|error| anyhow!("Could not resolve model config: {error}"))?
@@ -2191,7 +2191,7 @@ impl Agent {
             } else {
                 let config = Config::global();
                 let threshold = config
-                    .get_param::<f64>("GOOSE_AUTO_COMPACT_THRESHOLD")
+                    .get_param::<f64>("GHOSTY_AUTO_COMPACT_THRESHOLD")
                     .unwrap_or(DEFAULT_COMPACTION_THRESHOLD);
                 let threshold_percentage = (threshold * 100.0) as u32;
 
@@ -2388,7 +2388,7 @@ impl Agent {
             let mut turns_taken = 0u32;
             let max_turns = session_config.max_turns.unwrap_or_else(|| {
                 Config::global()
-                    .get_param::<u32>("GOOSE_MAX_TURNS")
+                    .get_param::<u32>("GHOSTY_MAX_TURNS")
                     .unwrap_or(DEFAULT_MAX_TURNS)
             });
             let mut compaction_attempts = 0;
@@ -3680,14 +3680,14 @@ impl Agent {
         let provider_name = session
             .provider_name
             .clone()
-            .or_else(|| config.get_goose_provider().ok())
+            .or_else(|| config.get_ghosty_provider().ok())
             .ok_or_else(|| anyhow!("Could not configure agent: missing provider"))?;
 
         let mut model_config = match session.model_config.clone() {
             Some(saved_config) => saved_config,
             None => {
                 let model_name = config
-                    .get_goose_model()
+                    .get_ghosty_model()
                     .ok()
                     .ok_or_else(|| anyhow!("Could not configure agent: missing model"))?;
                 crate::model_config::model_config_from_user_config(&provider_name, &model_name)
@@ -3727,7 +3727,7 @@ impl Agent {
                 (p, model_config, false)
             } else {
                 let fallback_provider_name = config
-                    .get_goose_provider()
+                    .get_ghosty_provider()
                     .ok()
                     .filter(|name| name != &provider_name)
                     .ok_or_else(|| {
@@ -3743,7 +3743,7 @@ impl Agent {
                     fallback_provider_name
                 );
 
-                let fallback_model_name = config.get_goose_model().ok().ok_or_else(|| {
+                let fallback_model_name = config.get_ghosty_model().ok().ok_or_else(|| {
                     anyhow!("Could not configure fallback provider: missing model")
                 })?;
                 let fallback_model_config = crate::model_config::model_config_from_user_config(
@@ -4044,7 +4044,7 @@ impl Agent {
         // but it doesn't know and the plumbing looks complicated.
         let config = Config::global();
         let provider_name: String = config
-            .get_goose_provider()
+            .get_ghosty_provider()
             .expect("No provider configured. Run 'goose configure' first");
 
         let settings = Settings {
@@ -4611,7 +4611,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_provider_replaces_harness_only_effort_for_legacy_provider() {
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", Some("high"))]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", Some("high"))]);
         let (agent, session, _data_dir) = tracing_test_agent_and_session().await;
         let provider = Arc::new(EffortProvider::new(EffortOutcome::Unhandled));
         let model_config =
@@ -4634,7 +4634,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_provider_preserves_harness_only_effort_for_managed_provider() {
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", Some("high"))]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", Some("high"))]);
         let (agent, session, _data_dir) = tracing_test_agent_and_session().await;
         let provider = Arc::new(EffortProvider::new(EffortOutcome::Applied));
         let model_config =
@@ -5372,7 +5372,7 @@ echo start >> "$PLUGIN_ROOT/hook.log"
                     content,
                     MessageContent::SystemNotification(notification)
                         if notification.msg.contains("more than 2 consecutive times")
-                            && notification.msg.contains("GOOSE_STOP_HOOK_BLOCK_CAP")
+                            && notification.msg.contains("GHOSTY_STOP_HOOK_BLOCK_CAP")
                 )
             })
         }));

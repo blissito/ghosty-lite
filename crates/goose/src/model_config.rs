@@ -30,7 +30,7 @@ pub fn model_config_from_user_config_with_session_settings(
     let model = materialize_model_config_inner(model, provider_name, false)?
         .with_context_limit(context_limit)
         .with_inherited_session_settings_from(previous, request_params)
-        .with_default_thinking_effort(config.get_goose_thinking_effort());
+        .with_default_thinking_effort(config.get_ghosty_thinking_effort());
 
     Ok(apply_canonical_limits(provider_name, model))
 }
@@ -56,19 +56,19 @@ fn materialize_model_config_inner(
     let config = Config::global();
 
     if model.temperature.is_none() {
-        model = model.with_temperature(get_goose_temperature(config)?);
+        model = model.with_temperature(get_ghosty_temperature(config)?);
     }
 
     if model.toolshim && model.toolshim_model.is_none() {
-        model = model.with_toolshim_model(get_goose_toolshim_model(config)?);
+        model = model.with_toolshim_model(get_ghosty_toolshim_model(config)?);
     }
 
     model = model
-        .with_default_context_limit(config.get_goose_context_limit()?)
-        .with_default_max_tokens(config.get_goose_max_tokens()?);
+        .with_default_context_limit(config.get_ghosty_context_limit()?)
+        .with_default_max_tokens(config.get_ghosty_max_tokens()?);
 
     if include_default_thinking_effort {
-        model = model.with_default_thinking_effort(config.get_goose_thinking_effort());
+        model = model.with_default_thinking_effort(config.get_ghosty_thinking_effort());
     }
 
     if provider_name == goose_providers::openai::OPEN_AI_PROVIDER_NAME {
@@ -80,7 +80,7 @@ fn materialize_model_config_inner(
 
 fn configured_fast_model_name() -> Option<String> {
     Config::global()
-        .get_param::<String>("GOOSE_FAST_MODEL")
+        .get_param::<String>("GHOSTY_FAST_MODEL")
         .ok()
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
@@ -88,7 +88,7 @@ fn configured_fast_model_name() -> Option<String> {
 
 /// Resolve the model config to use for lightweight "fast" tasks (session
 /// naming, tool-call labels, orchestrator routing). Resolution order:
-///   1. `GOOSE_FAST_MODEL` (user override)
+///   1. `GHOSTY_FAST_MODEL` (user override)
 ///   2. the provider's declared default fast model
 ///   3. the supplied `model_config` (i.e. the main model)
 ///
@@ -215,10 +215,10 @@ fn base_model_config_from_user_config(
     let mut model = ModelConfig {
         model_name: model_name.to_string(),
         context_limit: None,
-        temperature: get_goose_temperature(config)?,
+        temperature: get_ghosty_temperature(config)?,
         max_tokens: None,
-        toolshim: get_goose_toolshim(config)?.unwrap_or(false),
-        toolshim_model: get_goose_toolshim_model(config)?,
+        toolshim: get_ghosty_toolshim(config)?.unwrap_or(false),
+        toolshim_model: get_ghosty_toolshim_model(config)?,
         request_params: None,
         reasoning: None,
         supports_vision: None,
@@ -230,10 +230,10 @@ fn base_model_config_from_user_config(
     Ok(model)
 }
 
-fn get_goose_temperature(config: &Config) -> Result<Option<f32>> {
-    match config.get_param::<f32>("GOOSE_TEMPERATURE") {
+fn get_ghosty_temperature(config: &Config) -> Result<Option<f32>> {
+    match config.get_param::<f32>("GHOSTY_TEMPERATURE") {
         Ok(temp) if temp < 0.0 => Err(anyhow!(
-            "Value for 'GOOSE_TEMPERATURE' is out of valid range: {temp}"
+            "Value for 'GHOSTY_TEMPERATURE' is out of valid range: {temp}"
         )),
         Ok(temp) => Ok(Some(temp)),
         Err(ConfigError::NotFound(_)) => Ok(None),
@@ -241,9 +241,9 @@ fn get_goose_temperature(config: &Config) -> Result<Option<f32>> {
     }
 }
 
-fn get_goose_toolshim(config: &Config) -> Result<Option<bool>> {
-    match config.get_param::<serde_yaml::Value>("GOOSE_TOOLSHIM") {
-        Ok(value) => parse_yaml_bool_config("GOOSE_TOOLSHIM", value).map(Some),
+fn get_ghosty_toolshim(config: &Config) -> Result<Option<bool>> {
+    match config.get_param::<serde_yaml::Value>("GHOSTY_TOOLSHIM") {
+        Ok(value) => parse_yaml_bool_config("GHOSTY_TOOLSHIM", value).map(Some),
         Err(ConfigError::NotFound(_)) => Ok(None),
         Err(e) => Err(e.into()),
     }
@@ -251,16 +251,16 @@ fn get_goose_toolshim(config: &Config) -> Result<Option<bool>> {
 
 /// Resolve the global toolshim setting, defaulting to false when unset.
 pub fn global_toolshim() -> bool {
-    get_goose_toolshim(Config::global())
+    get_ghosty_toolshim(Config::global())
         .ok()
         .flatten()
         .unwrap_or(false)
 }
 
-fn get_goose_toolshim_model(config: &Config) -> Result<Option<String>> {
-    match config.get_param::<String>("GOOSE_TOOLSHIM_OLLAMA_MODEL") {
+fn get_ghosty_toolshim_model(config: &Config) -> Result<Option<String>> {
+    match config.get_param::<String>("GHOSTY_TOOLSHIM_OLLAMA_MODEL") {
         Ok(value) if value.trim().is_empty() => Err(anyhow!(
-            "Invalid value for 'GOOSE_TOOLSHIM_OLLAMA_MODEL': '{value}' - cannot be empty if set"
+            "Invalid value for 'GHOSTY_TOOLSHIM_OLLAMA_MODEL': '{value}' - cannot be empty if set"
         )),
         Ok(value) => Ok(Some(value)),
         Err(ConfigError::NotFound(_)) => Ok(None),

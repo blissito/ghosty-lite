@@ -311,7 +311,7 @@ mod tests {
     fn custom_file_prices_drive_estimation() {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_root = temp_dir.path().display().to_string();
-        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", Some(temp_root.as_str()))]);
+        let _guard = env_lock::lock_env([("GHOSTY_PATH_ROOT", Some(temp_root.as_str()))]);
 
         let dir = custom_providers_dir();
         std::fs::create_dir_all(&dir).unwrap();

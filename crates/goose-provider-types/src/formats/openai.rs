@@ -1773,7 +1773,7 @@ pub fn create_request_for_model_with_options(
     }
 
     // Only emit max_tokens / max_completion_tokens when the user (via
-    // GOOSE_MAX_TOKENS) or a canonical model record has supplied a value.
+    // GHOSTY_MAX_TOKENS) or a canonical model record has supplied a value.
     // For unknown models on OpenAI-compatible endpoints (e.g. llama_swap,
     // lmstudio) sending the historic 4096 default truncates non-trivial
     // responses; omitting the field lets the server use its own max.
@@ -3111,7 +3111,7 @@ mod tests {
     #[test]
     fn test_create_request_omits_max_tokens_when_unset() -> anyhow::Result<()> {
         // Unknown models on OpenAI-compatible local providers (llama_swap,
-        // lmstudio) have no canonical record and no GOOSE_MAX_TOKENS, so the
+        // lmstudio) have no canonical record and no GHOSTY_MAX_TOKENS, so the
         // request must not pin the legacy 4096 default. See issue #9007.
         let model_config = test_model_config("some-unknown-local-model");
         let request = create_request(

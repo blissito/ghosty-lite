@@ -63,8 +63,8 @@ async fn ensure_working_provider(
     let config = Config::global();
     let mut log: Vec<String> = Vec::new();
 
-    let provider_name = config.get_goose_provider().ok();
-    let model_name = config.get_goose_model().ok();
+    let provider_name = config.get_ghosty_provider().ok();
+    let model_name = config.get_ghosty_model().ok();
 
     if let (Some(ref pname), Some(ref mname)) = (&provider_name, &model_name) {
         log.push(format!("Checking {} / {} ...", pname, mname));
@@ -190,7 +190,7 @@ async fn try_other_models(
     let entry = providers::get_from_registry(provider_name).await.ok()?;
     let temp = entry.create_with_default_model(vec![]).await.ok()?;
     let toolshim = Config::global()
-        .get_param::<bool>("GOOSE_TOOLSHIM")
+        .get_param::<bool>("GHOSTY_TOOLSHIM")
         .unwrap_or(false);
     let models = temp.fetch_recommended_models(toolshim).await.ok()?;
 

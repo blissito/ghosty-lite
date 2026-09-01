@@ -57,10 +57,10 @@ impl Theme {
     fn as_str(&self) -> String {
         match self {
             Theme::Light => Config::global()
-                .get_param::<String>("GOOSE_CLI_LIGHT_THEME")
+                .get_param::<String>("GHOSTY_CLI_LIGHT_THEME")
                 .unwrap_or(DEFAULT_CLI_LIGHT_THEME.to_string()),
             Theme::Dark => Config::global()
-                .get_param::<String>("GOOSE_CLI_DARK_THEME")
+                .get_param::<String>("GHOSTY_CLI_DARK_THEME")
                 .unwrap_or(DEFAULT_CLI_DARK_THEME.to_string()),
             Theme::Ansi => "base16".to_string(),
         }
@@ -87,23 +87,23 @@ impl Theme {
 
 thread_local! {
     static CURRENT_THEME: RefCell<Theme> = RefCell::new(
-        std::env::var("GOOSE_CLI_THEME").ok()
+        std::env::var("GHOSTY_CLI_THEME").ok()
             .map(|val| Theme::from_config_str(&val))
             .unwrap_or_else(||
-                Config::global().get_param::<String>("GOOSE_CLI_THEME").ok()
+                Config::global().get_param::<String>("GHOSTY_CLI_THEME").ok()
                     .map(|val| Theme::from_config_str(&val))
                     .unwrap_or(Theme::Ansi)
             )
     );
     static SHOW_FULL_TOOL_OUTPUT: RefCell<bool> = RefCell::new(
-        Config::global().get_param::<bool>("GOOSE_SHOW_FULL_OUTPUT").unwrap_or(false)
+        Config::global().get_param::<bool>("GHOSTY_SHOW_FULL_OUTPUT").unwrap_or(false)
     );
 }
 
 pub fn set_theme(theme: Theme) {
     let config = Config::global();
     config
-        .set_param("GOOSE_CLI_THEME", theme.as_config_string())
+        .set_param("GHOSTY_CLI_THEME", theme.as_config_string())
         .expect("Failed to set theme");
     CURRENT_THEME.with(|t| *t.borrow_mut() = theme);
 
@@ -114,7 +114,7 @@ pub fn set_theme(theme: Theme) {
         Theme::Ansi => "ansi",
     };
 
-    if let Err(e) = config.set_param("GOOSE_CLI_THEME", theme_str) {
+    if let Err(e) = config.set_param("GHOSTY_CLI_THEME", theme_str) {
         eprintln!("Failed to save theme setting to config: {}", e);
     }
 }
@@ -197,7 +197,7 @@ pub fn hide_thinking() {
 }
 
 pub fn run_status_hook(status: &str) {
-    if let Ok(hook) = Config::global().get_param::<String>("GOOSE_STATUS_HOOK") {
+    if let Ok(hook) = Config::global().get_param::<String>("GHOSTY_STATUS_HOOK") {
         let status = status.to_string();
         std::thread::spawn(move || {
             #[cfg(target_os = "windows")]
@@ -501,7 +501,7 @@ pub fn goose_mode_message(text: &str) {
 
 fn should_show_thinking() -> bool {
     Config::global()
-        .get_param::<bool>("GOOSE_CLI_SHOW_THINKING")
+        .get_param::<bool>("GHOSTY_CLI_SHOW_THINKING")
         .unwrap_or(false)
         && std::io::stdout().is_terminal()
 }
@@ -567,7 +567,7 @@ fn render_tool_response(resp: &ToolResponse, debug: bool) {
                 }
 
                 let min_priority = config
-                    .get_param::<f32>("GOOSE_CLI_MIN_PRIORITY")
+                    .get_param::<f32>("GHOSTY_CLI_MIN_PRIORITY")
                     .ok()
                     .unwrap_or(DEFAULT_MIN_PRIORITY);
 
@@ -1431,7 +1431,7 @@ fn set_terminal_title() {
     // Sanitize: strip control characters (ESC, BEL, etc.) to prevent terminal escape injection
     let sanitized: String = dir_name.chars().filter(|c| !c.is_control()).collect();
     // OSC 0 sets the terminal window/tab title
-    print!("\x1b]0;🪿 {}\x07", sanitized);
+    print!("\x1b]0;👻 {}\x07", sanitized);
     let _ = std::io::stdout().flush();
 }
 
@@ -1650,8 +1650,8 @@ mod tests {
     #[test]
     fn terminal_line_sanitizer_preserves_plain_unicode_text() {
         assert_eq!(
-            sanitize_terminal_line("goose 🪿\t日本語"),
-            "goose 🪿\t日本語"
+            sanitize_terminal_line("goose 👻\t日本語"),
+            "goose 👻\t日本語"
         );
     }
 

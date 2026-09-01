@@ -94,13 +94,13 @@ impl rustyline::ConditionalEventHandler for CtrlCHandler {
 }
 
 /// The Ctrl-modified character that inserts a newline instead of submitting the
-/// prompt. Configurable via `GOOSE_CLI_NEWLINE_KEY`, defaulting to `j` (Ctrl+J).
+/// prompt. Configurable via `GHOSTY_CLI_NEWLINE_KEY`, defaulting to `j` (Ctrl+J).
 /// Characters already bound to other actions are rejected: `m` (Ctrl+M is Enter)
 /// and `c` (Ctrl+C interrupts), both of which would otherwise shadow the paste
 /// and interrupt handlers.
 pub fn get_newline_key() -> char {
     Config::global()
-        .get_param::<String>("GOOSE_CLI_NEWLINE_KEY")
+        .get_param::<String>("GHOSTY_CLI_NEWLINE_KEY")
         .ok()
         .and_then(|s| s.chars().next())
         .map(|c| c.to_ascii_lowercase())
@@ -126,12 +126,12 @@ pub fn get_input(
     conversation_messages: Option<&Vec<String>>,
 ) -> Result<InputResult> {
     let config = Config::global();
-    let prompt_editor = config.get_goose_prompt_editor().ok().flatten();
-    let editor_always_override = config.get_goose_prompt_editor_always().ok().flatten();
+    let prompt_editor = config.get_ghosty_prompt_editor().ok().flatten();
+    let editor_always_override = config.get_ghosty_prompt_editor_always().ok().flatten();
     let editor_always = should_use_editor_always(prompt_editor.as_deref(), editor_always_override);
 
     if editor_always {
-        if let Ok(Some(editor_cmd)) = config.get_goose_prompt_editor() {
+        if let Ok(Some(editor_cmd)) = config.get_ghosty_prompt_editor() {
             if !editor_cmd.is_empty() {
                 let messages = extract_recent_messages(conversation_messages);
                 let message_refs: Vec<&str> = messages.iter().map(|s| s.as_str()).collect();
@@ -483,7 +483,7 @@ fn help_text() -> String {
 /plan <message_text> -  Enters 'plan' mode with optional message. Create a plan based on the current messages and asks user if they want to act on it.
                         If user acts on the plan, goose mode is set to 'auto' and returns to 'normal' goose mode.
                         To warm up goose before using '/plan', we recommend setting '/mode approve' & putting appropriate context into goose.
-                        The model is used based on $GOOSE_PLANNER_PROVIDER and $GOOSE_PLANNER_MODEL environment variables.
+                        The model is used based on $GHOSTY_PLANNER_PROVIDER and $GHOSTY_PLANNER_MODEL environment variables.
                         If no model is set, the default model is used.
 /endplan - Exit plan mode and return to 'normal' goose mode.
 /recipe [filepath] - Generate a recipe from the current conversation and save it to the specified filepath (must end with .yaml).
@@ -491,7 +491,7 @@ fn help_text() -> String {
 /compact - Compact the current conversation to reduce context length while preserving key information.
 {additional_builtin_help}/status - Show session status: model, provider, mode, and token usage.
 /edit [text] - Open your prompt editor to compose a message. Optionally pre-fill with text.
-               Uses $GOOSE_PROMPT_EDITOR, $VISUAL, or $EDITOR (in that order).
+               Uses $GHOSTY_PROMPT_EDITOR, $VISUAL, or $EDITOR (in that order).
 /skills - List available skills or enable skills by name (usage: /skills [<name>...])
 /? or /help - Display this help message
 /clear - Clears the current chat history
@@ -499,7 +499,7 @@ fn help_text() -> String {
 
 Navigation:
 Enter - Send message
-Ctrl+{newline_key} - Add a newline (configurable via GOOSE_CLI_NEWLINE_KEY)
+Ctrl+{newline_key} - Add a newline (configurable via GHOSTY_CLI_NEWLINE_KEY)
 Ctrl+C - Clear current line if text is entered, otherwise exit the session
 Up/Down arrows - Navigate through command history"
     )

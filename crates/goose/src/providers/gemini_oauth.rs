@@ -1108,7 +1108,7 @@ mod tests {
     fn test_token_cache_roundtrip() {
         let root = tempfile::tempdir().unwrap();
         let root_path = root.path().to_string_lossy().to_string();
-        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", Some(root_path.as_str()))]);
+        let _guard = env_lock::lock_env([("GHOSTY_PATH_ROOT", Some(root_path.as_str()))]);
 
         let cache = TokenCache::new();
         cache.clear();

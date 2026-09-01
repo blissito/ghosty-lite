@@ -7,8 +7,8 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-const HELPER_ENV: &str = "GOOSE_SUBPROCESS_PARENT_DEATH_HELPER";
-const THREAD_HELPER_ENV: &str = "GOOSE_SUBPROCESS_THREAD_DEATH_HELPER";
+const HELPER_ENV: &str = "GHOSTY_SUBPROCESS_PARENT_DEATH_HELPER";
+const THREAD_HELPER_ENV: &str = "GHOSTY_SUBPROCESS_THREAD_DEATH_HELPER";
 
 struct HelperProcess(Child);
 

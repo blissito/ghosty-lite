@@ -200,7 +200,7 @@ impl GooseCompleter {
         let current_provider = {
             let cache = self.completion_cache.read().unwrap();
             if cache.current_session_provider.is_empty() {
-                Config::global().get_goose_provider().unwrap_or_default()
+                Config::global().get_ghosty_provider().unwrap_or_default()
             } else {
                 cache.current_session_provider.clone()
             }

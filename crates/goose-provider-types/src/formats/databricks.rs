@@ -1476,7 +1476,7 @@ mod tests {
 
     #[test]
     fn test_create_request_adaptive_thinking_for_new_anthropic_models() -> anyhow::Result<()> {
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", None::<&str>)]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", None::<&str>)]);
 
         for name in [
             "databricks-claude-opus-4-7",
@@ -1504,7 +1504,7 @@ mod tests {
     #[test]
     fn test_create_request_always_on_adaptive_off_effort_falls_back_to_high() -> anyhow::Result<()>
     {
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", None::<&str>)]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", None::<&str>)]);
         let mut model_config = ModelConfig::new("databricks-claude-fable-5");
         model_config.max_tokens = Some(4096);
         let mut params = std::collections::HashMap::new();

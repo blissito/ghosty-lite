@@ -108,7 +108,7 @@ async fn reply_streams_the_turn_and_ends() -> Result<()> {
 
 #[tokio::test]
 async fn bang_shell_uses_the_state_machine_when_the_flag_is_disabled() -> Result<()> {
-    let _guard = env_lock::lock_env([("GOOSE_STATE_MACHINE", None::<&str>)]);
+    let _guard = env_lock::lock_env([("GHOSTY_STATE_MACHINE", None::<&str>)]);
     let (agent, api, session_id, _temp_dir) = agent_with_dummy_api().await?;
     let session_config = SessionConfig {
         id: session_id,
@@ -301,12 +301,12 @@ async fn assert_bang_shell_uses_only_user_visible_content() -> Result<()> {
 
 #[tokio::test]
 async fn bang_shell_visibility_is_enforced_when_state_machine_is_disabled() -> Result<()> {
-    let _guard = env_lock::lock_env([("GOOSE_STATE_MACHINE", None::<&str>)]);
+    let _guard = env_lock::lock_env([("GHOSTY_STATE_MACHINE", None::<&str>)]);
     assert_bang_shell_uses_only_user_visible_content().await
 }
 
 #[tokio::test]
 async fn bang_shell_visibility_is_enforced_when_state_machine_is_enabled() -> Result<()> {
-    let _guard = env_lock::lock_env([("GOOSE_STATE_MACHINE", Some("1"))]);
+    let _guard = env_lock::lock_env([("GHOSTY_STATE_MACHINE", Some("1"))]);
     assert_bang_shell_uses_only_user_visible_content().await
 }

@@ -401,7 +401,7 @@ fn current_thinking_effort_value(model_config: &ModelConfig) -> String {
     if model_config.is_reasoning_model() {
         model_config
             .thinking_effort()
-            .or_else(|| Config::global().get_goose_thinking_effort())
+            .or_else(|| Config::global().get_ghosty_thinking_effort())
             .map(|effort| effort.to_string())
             .unwrap_or_else(|| "off".to_string())
     } else {
@@ -880,7 +880,7 @@ mod tests {
     fn test_build_config_options_effort_current_value(persisted: Option<&str>) -> String {
         // Unoffered by the capability below, so the global default never wins
         // and the test doesn't depend on the machine's configured value.
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", Some("medium"))]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", Some("medium"))]);
         let support = ThinkingEffortSupport::Options(effort_capability(
             &["default", "low", "high", "xhigh"],
             "low",
@@ -891,7 +891,7 @@ mod tests {
 
     #[test]
     fn test_build_config_options_effort_falls_back_to_the_global_default() {
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", Some("high"))]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", Some("high"))]);
         let support =
             ThinkingEffortSupport::Options(effort_capability(&["default", "high"], "default"));
 

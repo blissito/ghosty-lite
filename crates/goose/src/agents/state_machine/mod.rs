@@ -61,7 +61,7 @@ pub(super) use ops_toolcalling::ToolExecutionOperation;
 pub(super) use ops_unknown_tool::UnknownToolOperation;
 
 pub fn enabled() -> bool {
-    std::env::var("GOOSE_STATE_MACHINE")
+    std::env::var("GHOSTY_STATE_MACHINE")
         .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes"))
         .unwrap_or(false)
 }

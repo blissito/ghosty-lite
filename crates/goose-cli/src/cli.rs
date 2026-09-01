@@ -33,15 +33,12 @@ use goose::session::session_manager::SessionType;
 use goose::session::SessionManager;
 use std::io::Read;
 use std::path::PathBuf;
-const GOOSE_SERVER_SECRET_KEY_ENV: &str = "GOOSE_SERVER__SECRET_KEY";
+const GHOSTY_SERVER_TOKEN_ENV: &str = "GHOSTY_SERVER_TOKEN";
 
 fn generate_serve_secret_key() -> String {
     use rand::distr::{Alphanumeric, SampleString};
 
-    format!(
-        "goose-acp-{}",
-        Alphanumeric.sample_string(&mut rand::rng(), 32)
-    )
+    format!("ghl-{}", Alphanumeric.sample_string(&mut rand::rng(), 32))
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -61,7 +58,7 @@ impl From<ServePlatform> for GoosePlatform {
 }
 
 #[derive(Parser)]
-#[command(name = "goose", author, version, display_name = "", about, long_about = None)]
+#[command(name = "ghosty", author, version, display_name = "", about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -266,7 +263,7 @@ pub struct InputOptions {
         long = "sub-recipe",
         value_name = "RECIPE",
         help = "Sub-recipe name or file path (can be specified multiple times)",
-        long_help = "Specify sub-recipes to include alongside the main recipe. Can be:\n  - Recipe names from GitHub (if GOOSE_RECIPE_GITHUB_REPO is configured)\n  - Local file paths to YAML files\nCan be specified multiple times to include multiple sub-recipes.",
+        long_help = "Specify sub-recipes to include alongside the main recipe. Can be:\n  - Recipe names from GitHub (if GHOSTY_RECIPE_GITHUB_REPO is configured)\n  - Local file paths to YAML files\nCan be specified multiple times to include multiple sub-recipes.",
         action = clap::ArgAction::Append
     )]
     pub additional_sub_recipes: Vec<String>,
@@ -325,7 +322,7 @@ pub struct ModelOptions {
         long = "provider",
         value_name = "PROVIDER",
         help = "Specify the LLM provider to use (e.g., 'openai', 'anthropic')",
-        long_help = "Override the GOOSE_PROVIDER environment variable for this run. Available providers include openai, anthropic, ollama, databricks, gemini-cli, claude-code, and others."
+        long_help = "Override the GHOSTY_PROVIDER environment variable for this run. Available providers include openai, anthropic, ollama, databricks, gemini-cli, claude-code, and others."
     )]
     pub provider: Option<String>,
 
@@ -334,7 +331,7 @@ pub struct ModelOptions {
         long = "model",
         value_name = "MODEL",
         help = "Specify the model to use (e.g., 'gpt-4o', 'claude-sonnet-4-20250514')",
-        long_help = "Override the GOOSE_MODEL environment variable for this run. The model must be supported by the specified provider."
+        long_help = "Override the GHOSTY_MODEL environment variable for this run. The model must be supported by the specified provider."
     )]
     pub model: Option<String>,
 }
@@ -821,7 +818,7 @@ enum Command {
 
         #[arg(
             long = "dangerously-unauthenticated",
-            help = "Start the ACP endpoint without requiring GOOSE_SERVER__SECRET_KEY"
+            help = "Start the ACP endpoint without requiring GHOSTY_SERVER_TOKEN"
         )]
         dangerously_unauthenticated: bool,
 
@@ -1310,13 +1307,13 @@ async fn handle_mcp_probe(extension_command: String, script_path: Option<String>
     }
 
     if let Some(client_id) = &script.oauth.client_id {
-        std::env::set_var("GOOSE_MCP_OAUTH_CLIENT_ID", client_id);
+        std::env::set_var("GHOSTY_MCP_OAUTH_CLIENT_ID", client_id);
     }
     if let Some(client_secret) = &script.oauth.client_secret {
-        std::env::set_var("GOOSE_MCP_OAUTH_CLIENT_SECRET", client_secret);
+        std::env::set_var("GHOSTY_MCP_OAUTH_CLIENT_SECRET", client_secret);
     }
     if let Some(client_metadata_url) = &script.oauth.client_metadata_url {
-        std::env::set_var("GOOSE_MCP_OAUTH_CLIENT_METADATA_URL", client_metadata_url);
+        std::env::set_var("GHOSTY_MCP_OAUTH_CLIENT_METADATA_URL", client_metadata_url);
     }
 
     let config = goose::config::Config::global();
@@ -1324,7 +1321,7 @@ async fn handle_mcp_probe(extension_command: String, script_path: Option<String>
         std::sync::Arc::new(SessionManager::instance()),
         goose::config::permission::PermissionManager::instance(),
         None,
-        config.get_goose_mode().unwrap_or_default(),
+        config.get_ghosty_mode().unwrap_or_default(),
         true,
         GoosePlatform::GooseCli,
     );
@@ -1507,19 +1504,19 @@ async fn handle_serve_command(args: ServeCommandArgs) -> Result<()> {
         session_cwd: None,
         enable_scheduler,
     }));
-    let env_secret = std::env::var(GOOSE_SERVER_SECRET_KEY_ENV)
+    let env_secret = std::env::var(GHOSTY_SERVER_TOKEN_ENV)
         .ok()
         .map(|secret| secret.trim().to_string())
         .filter(|secret| !secret.is_empty());
     let require_token = env_secret.is_some();
     if !require_token && !dangerously_unauthenticated {
         anyhow::bail!(
-            "{GOOSE_SERVER_SECRET_KEY_ENV} must be set to start `goose serve`; pass --dangerously-unauthenticated to run without ACP authentication"
+            "{GHOSTY_SERVER_TOKEN_ENV} must be set to start `goose serve`; pass --dangerously-unauthenticated to run without ACP authentication"
         );
     }
     if dangerously_unauthenticated && !require_token {
         warn!(
-            "{GOOSE_SERVER_SECRET_KEY_ENV} is not set and --dangerously-unauthenticated was passed; the ACP endpoint will accept unauthenticated connections"
+            "{GHOSTY_SERVER_TOKEN_ENV} is not set and --dangerously-unauthenticated was passed; the ACP endpoint will accept unauthenticated connections"
         );
     }
     let additional_allowed_origins = allowed_origins
@@ -1547,11 +1544,11 @@ async fn handle_serve_command(args: ServeCommandArgs) -> Result<()> {
 
     let config = Config::global();
     let tls_cert_path =
-        tls_cert_path.or_else(|| config.get_param::<String>("GOOSE_TLS_CERT_PATH").ok());
+        tls_cert_path.or_else(|| config.get_param::<String>("GHOSTY_TLS_CERT_PATH").ok());
     let tls_key_path =
-        tls_key_path.or_else(|| config.get_param::<String>("GOOSE_TLS_KEY_PATH").ok());
+        tls_key_path.or_else(|| config.get_param::<String>("GHOSTY_TLS_KEY_PATH").ok());
     let tls = tls
-        || config.get_param::<bool>("GOOSE_TLS").unwrap_or(false)
+        || config.get_param::<bool>("GHOSTY_TLS").unwrap_or(false)
         || tls_cert_path.is_some()
         || tls_key_path.is_some();
 
@@ -1710,7 +1707,7 @@ async fn handle_interactive_session(args: InteractiveSessionArgs) -> Result<()> 
         }
     }
 
-    let goose_mode = Config::global().get_goose_mode().unwrap_or_default();
+    let goose_mode = Config::global().get_ghosty_mode().unwrap_or_default();
     let mut session_id = get_or_create_session_id(identifier, resume, false, goose_mode).await?;
 
     if edit || fork {
@@ -1942,7 +1939,7 @@ async fn handle_run_command(
         }
     }
 
-    let goose_mode = Config::global().get_goose_mode().unwrap_or_default();
+    let goose_mode = Config::global().get_ghosty_mode().unwrap_or_default();
     let session_id = get_or_create_session_id(
         identifier,
         run_behavior.resume,
@@ -2068,7 +2065,7 @@ async fn handle_default_session() -> Result<()> {
         return handle_configure().await;
     }
 
-    let goose_mode = Config::global().get_goose_mode().unwrap_or_default();
+    let goose_mode = Config::global().get_ghosty_mode().unwrap_or_default();
     let session_id = get_or_create_session_id(None, false, false, goose_mode).await?;
 
     let mut session = build_session(SessionBuilderConfig {

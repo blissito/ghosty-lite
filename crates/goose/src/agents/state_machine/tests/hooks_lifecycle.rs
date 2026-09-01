@@ -139,7 +139,7 @@ async fn stop_hooks_allow_block_and_skip_non_stop_exits() -> Result<()> {
                 content,
                 MessageContent::SystemNotification(notification)
                     if notification.notification_type == SystemNotificationType::InlineMessage
-                        && notification.msg.contains("GOOSE_STOP_HOOK_BLOCK_CAP")
+                        && notification.msg.contains("GHOSTY_STOP_HOOK_BLOCK_CAP")
             )
         })
     }));
@@ -276,7 +276,7 @@ async fn stop_hook_distinct_id_denials_retry_once_then_respect_block_cap() -> Re
                 content,
                 MessageContent::SystemNotification(notification)
                     if notification.notification_type == SystemNotificationType::InlineMessage
-                        && notification.msg.contains("GOOSE_STOP_HOOK_BLOCK_CAP")
+                        && notification.msg.contains("GHOSTY_STOP_HOOK_BLOCK_CAP")
             )
         })
     }));

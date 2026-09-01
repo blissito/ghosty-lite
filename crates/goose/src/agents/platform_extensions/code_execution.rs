@@ -287,7 +287,7 @@ impl CodeExecutionClient {
 
 fn execution_timeout() -> Duration {
     let secs = crate::config::Config::global()
-        .get_goose_default_extension_timeout()
+        .get_ghosty_default_extension_timeout()
         .unwrap_or(crate::config::DEFAULT_EXTENSION_TIMEOUT);
     Duration::from_secs(secs)
 }

@@ -1028,8 +1028,8 @@ async fn execute_job(
     ));
 
     let config = Config::global();
-    let provider_name = config.get_goose_provider()?;
-    let model_name = config.get_goose_model()?;
+    let provider_name = config.get_ghosty_provider()?;
+    let model_name = config.get_ghosty_model()?;
     let model_config =
         crate::model_config::model_config_from_user_config(&provider_name, &model_name)?;
 
@@ -1324,7 +1324,7 @@ mod tests {
     async fn validated_recipe_bytes_and_base_are_persisted_after_source_replacement() {
         let temp_dir = tempdir().unwrap();
         let _guard =
-            env_lock::lock_env([("GOOSE_PATH_ROOT", Some(temp_dir.path().to_str().unwrap()))]);
+            env_lock::lock_env([("GHOSTY_PATH_ROOT", Some(temp_dir.path().to_str().unwrap()))]);
         let trusted_dir = temp_dir.path().join("trusted");
         let replacement_dir = temp_dir.path().join("replacement");
         fs::create_dir_all(&trusted_dir).unwrap();
@@ -1410,9 +1410,9 @@ mod tests {
     #[tokio::test]
     async fn test_job_runs_on_schedule() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_PROVIDER", Some("openai")),
-            ("GOOSE_MODEL", Some("gpt-4o")),
-            ("GOOSE_MODE", Some("chat")),
+            ("GHOSTY_PROVIDER", Some("openai")),
+            ("GHOSTY_MODEL", Some("gpt-4o")),
+            ("GHOSTY_MODE", Some("chat")),
             ("OPENAI_API_KEY", Some("fake-openai-no-keyring")),
             ("OPENAI_CUSTOM_HEADERS", Some("")),
         ]);
@@ -1467,8 +1467,8 @@ mod tests {
     #[tokio::test]
     async fn test_paused_job_does_not_run() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_PROVIDER", Some("openai")),
-            ("GOOSE_MODEL", Some("gpt-4o")),
+            ("GHOSTY_PROVIDER", Some("openai")),
+            ("GHOSTY_MODEL", Some("gpt-4o")),
             ("OPENAI_API_KEY", Some("fake-openai-no-keyring")),
             ("OPENAI_CUSTOM_HEADERS", Some("")),
         ]);
@@ -1653,8 +1653,8 @@ mod tests {
     #[tokio::test]
     async fn test_job_with_no_prompt_does_not_panic() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_PROVIDER", Some("openai")),
-            ("GOOSE_MODEL", Some("gpt-4o")),
+            ("GHOSTY_PROVIDER", Some("openai")),
+            ("GHOSTY_MODEL", Some("gpt-4o")),
             ("OPENAI_API_KEY", Some("fake-openai-no-keyring")),
             ("OPENAI_CUSTOM_HEADERS", Some("")),
         ]);

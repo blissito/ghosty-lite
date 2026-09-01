@@ -3,7 +3,7 @@ use crate::providers::inventory::ensure_refresh_identity_current;
 
 impl HandleDispatchFrom<Client> for GooseAcpHandler {
     fn describe_chain(&self) -> impl std::fmt::Debug {
-        "goose-acp"
+        "ghosty-lite"
     }
 
     fn handle_dispatch_from(

@@ -49,7 +49,7 @@ impl HuggingFaceTokenData {
 }
 
 pub fn oauth_client_id() -> &'static str {
-    option_env!("GOOSE_HUGGINGFACE_OAUTH_CLIENT_ID")
+    option_env!("GHOSTY_HUGGINGFACE_OAUTH_CLIENT_ID")
         .filter(|client_id| !client_id.trim().is_empty())
         .unwrap_or(HUGGINGFACE_OAUTH_CLIENT_METADATA_URL)
 }
@@ -627,7 +627,7 @@ mod tests {
 
     #[test]
     fn oauth_client_id_defaults_to_cimd_metadata_url() {
-        if option_env!("GOOSE_HUGGINGFACE_OAUTH_CLIENT_ID").is_none() {
+        if option_env!("GHOSTY_HUGGINGFACE_OAUTH_CLIENT_ID").is_none() {
             assert_eq!(oauth_client_id(), HUGGINGFACE_OAUTH_CLIENT_METADATA_URL);
         }
     }

@@ -13,7 +13,7 @@ Do NOT use this skill for:
 - General coding tasks unrelated to goose
 - Running existing recipes (just run them directly)
 
-The docs root for this session is `{{GOOSE_DOCS_ROOT}}`. It may be a local
+The docs root for this session is `{{GHOSTY_DOCS_ROOT}}`. It may be a local
 filesystem path or an HTTP(S) URL. When it is a local path read files with the
 shell/file tools; when it is not set or is an HTTP(S) URL fetch them from the
 canonical location which is https://goose-docs.ai. Everything below refers to

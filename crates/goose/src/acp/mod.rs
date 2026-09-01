@@ -24,9 +24,9 @@ pub(crate) fn configured_model_for_provider(
     config: &crate::config::Config,
     provider_name: &str,
 ) -> String {
-    if config.get_goose_provider().ok().as_deref() == Some(provider_name) {
+    if config.get_ghosty_provider().ok().as_deref() == Some(provider_name) {
         config
-            .get_goose_model()
+            .get_ghosty_model()
             .unwrap_or_else(|_| ACP_CURRENT_MODEL.to_string())
     } else {
         ACP_CURRENT_MODEL.to_string()
@@ -52,8 +52,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let config =
             crate::config::Config::new(directory.path().join("config.yaml"), "test").unwrap();
-        config.set_goose_provider("openai").unwrap();
-        config.set_goose_model("gpt-5").unwrap();
+        config.set_ghosty_provider("openai").unwrap();
+        config.set_ghosty_model("gpt-5").unwrap();
 
         assert_eq!(
             configured_model_for_provider(&config, "copilot-acp"),
@@ -66,8 +66,10 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let config =
             crate::config::Config::new(directory.path().join("config.yaml"), "test").unwrap();
-        config.set_goose_provider("pi-acp").unwrap();
-        config.set_goose_model("anthropic/claude-sonnet-4").unwrap();
+        config.set_ghosty_provider("pi-acp").unwrap();
+        config
+            .set_ghosty_model("anthropic/claude-sonnet-4")
+            .unwrap();
 
         assert_eq!(
             configured_model_for_provider(&config, "pi-acp"),

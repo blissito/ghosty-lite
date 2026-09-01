@@ -57,7 +57,7 @@ enum ProviderCheckError {
 async fn check_provider(
     config: &Config,
 ) -> std::result::Result<ProviderCheckSuccess, ProviderCheckError> {
-    let (provider, model) = match (config.get_goose_provider(), config.get_goose_model()) {
+    let (provider, model) = match (config.get_ghosty_provider(), config.get_ghosty_model()) {
         (Ok(provider), Ok(model)) => (provider, model),
         (Err(e), _) => {
             return Err(ProviderCheckError::NotConfigured {

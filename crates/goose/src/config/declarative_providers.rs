@@ -758,7 +758,7 @@ mod tests {
     fn test_load_provider_allows_legacy_custom_id_with_punctuation() {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_root = temp_dir.path().display().to_string();
-        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", Some(temp_root.as_str()))]);
+        let _guard = env_lock::lock_env([("GHOSTY_PATH_ROOT", Some(temp_root.as_str()))]);
 
         write_legacy_provider_config("custom_z.ai", "Z.AI");
 
@@ -771,7 +771,7 @@ mod tests {
     fn test_update_and_remove_provider_allow_legacy_custom_id_with_punctuation() {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_root = temp_dir.path().display().to_string();
-        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", Some(temp_root.as_str()))]);
+        let _guard = env_lock::lock_env([("GHOSTY_PATH_ROOT", Some(temp_root.as_str()))]);
 
         write_legacy_provider_config("custom_z.ai", "Z.AI");
 
@@ -904,7 +904,7 @@ mod tests {
     fn test_update_custom_provider_preserves_model_pricing_and_context_limits() {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_root = temp_dir.path().display().to_string();
-        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", Some(temp_root.as_str()))]);
+        let _guard = env_lock::lock_env([("GHOSTY_PATH_ROOT", Some(temp_root.as_str()))]);
 
         let custom_dir = custom_providers_dir();
         std::fs::create_dir_all(&custom_dir).unwrap();

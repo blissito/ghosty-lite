@@ -63,17 +63,17 @@ pub fn set_provider_entry(
 }
 
 pub fn get_active_provider(config: &Config) -> Option<String> {
-    if let Ok(val) = env::var("GOOSE_PROVIDER") {
+    if let Ok(val) = env::var("GHOSTY_PROVIDER") {
         return Some(val);
     }
     if let Ok(val) = config.get_param::<String>(ACTIVE_PROVIDER_KEY) {
         return Some(val);
     }
-    config.get_param::<String>("GOOSE_PROVIDER").ok()
+    config.get_param::<String>("GHOSTY_PROVIDER").ok()
 }
 
 pub fn get_active_model(config: &Config) -> Option<String> {
-    if let Ok(val) = env::var("GOOSE_MODEL") {
+    if let Ok(val) = env::var("GHOSTY_MODEL") {
         return Some(val);
     }
     if let Some(provider_name) = get_active_provider(config) {
@@ -83,7 +83,7 @@ pub fn get_active_model(config: &Config) -> Option<String> {
             }
         }
     }
-    config.get_param::<String>("GOOSE_MODEL").ok()
+    config.get_param::<String>("GHOSTY_MODEL").ok()
 }
 
 pub fn set_active_provider(config: &Config, name: &str, model: &str) -> Result<(), ConfigError> {
@@ -97,7 +97,7 @@ pub fn set_active_provider(config: &Config, name: &str, model: &str) -> Result<(
 }
 
 pub fn clear_active_provider(config: &Config) -> Result<(), ConfigError> {
-    for key in [ACTIVE_PROVIDER_KEY, "GOOSE_PROVIDER", "GOOSE_MODEL"] {
+    for key in [ACTIVE_PROVIDER_KEY, "GHOSTY_PROVIDER", "GHOSTY_MODEL"] {
         match config.delete(key) {
             Ok(()) | Err(ConfigError::NotFound(_)) => {}
             Err(e) => return Err(e),
@@ -163,8 +163,8 @@ mod tests {
     #[test]
     fn test_clear_active_provider_removes_legacy_keys() {
         let config = new_test_config();
-        config.set_param("GOOSE_PROVIDER", "anthropic").unwrap();
-        config.set_param("GOOSE_MODEL", "claude").unwrap();
+        config.set_param("GHOSTY_PROVIDER", "anthropic").unwrap();
+        config.set_param("GHOSTY_MODEL", "claude").unwrap();
 
         clear_active_provider(&config).unwrap();
 

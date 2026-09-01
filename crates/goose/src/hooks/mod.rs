@@ -2198,7 +2198,7 @@ mod tests {
         let fake_shell = fake_shell.to_string_lossy().into_owned();
         let fake_login_path = format!("{}:/usr/bin:/bin", login_bin.display());
         let _guard = env_lock::lock_env([
-            ("GOOSE_SHELL", Some(fake_shell.as_str())),
+            ("GHOSTY_SHELL", Some(fake_shell.as_str())),
             ("FAKE_LOGIN_PATH", Some(fake_login_path.as_str())),
             (
                 "PATH",

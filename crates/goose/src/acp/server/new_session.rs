@@ -47,7 +47,7 @@ impl GooseAcpAgent {
         validate_absolute_cwd(&args.cwd)?;
         let config = Config::global();
         let session_type = session_type_from_meta(args.meta.as_ref())?;
-        let current_mode: GooseMode = config.get_goose_mode().unwrap_or_default();
+        let current_mode: GooseMode = config.get_ghosty_mode().unwrap_or_default();
         let recipe = self.resolve_recipe_from_meta(args.meta.as_ref()).await?;
         let meta = new_session_meta_fields(args.meta.as_ref(), recipe.as_ref())?;
         let session_name = recipe_title(recipe.as_ref())
@@ -199,7 +199,7 @@ impl GooseAcpAgent {
                 Some(provider) => provider,
                 None => {
                     if let Some(model) = recipe_model.as_deref() {
-                        let provider = config.get_goose_provider().map_err(|error| {
+                        let provider = config.get_ghosty_provider().map_err(|error| {
                             agent_client_protocol::Error::internal_error()
                                 .data(format!("Failed to resolve provider: {}", error))
                         })?;

@@ -94,7 +94,7 @@ fn load_host(config: &Config) -> Result<String> {
 
 fn resolve_instance_id() -> Option<String> {
     let enabled = Config::global()
-        .get_param::<bool>("GOOSE_DATABRICKS_CLIENT_REQUEST_ID")
+        .get_param::<bool>("GHOSTY_DATABRICKS_CLIENT_REQUEST_ID")
         .unwrap_or(false);
     enabled.then(|| crate::instance_id::get_instance_id().to_string())
 }

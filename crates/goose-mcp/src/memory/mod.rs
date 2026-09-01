@@ -1,4 +1,3 @@
-use etcetera::{choose_app_strategy, AppStrategy};
 use indoc::formatdoc;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -130,9 +129,7 @@ impl MemoryServer {
              Use category "*" with retrieve_memories or remove_memory_category to access all entries.
             "#};
 
-        let global_memory_dir = choose_app_strategy(crate::APP_STRATEGY.clone())
-            .map(|strategy| strategy.in_config_dir("memory"))
-            .unwrap_or_else(|_| PathBuf::from(".config/goose/memory"));
+        let global_memory_dir = crate::ghosty_home().join("config").join("memory");
 
         let mut memory_router = Self {
             tool_router: Self::tool_router(),

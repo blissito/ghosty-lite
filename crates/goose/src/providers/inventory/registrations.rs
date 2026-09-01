@@ -294,7 +294,7 @@ mod tests {
     fn gemini_oauth_inventory_configured_uses_token_cache() {
         let root = tempfile::tempdir().unwrap();
         let root_path = root.path().to_string_lossy().to_string();
-        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", Some(root_path.as_str()))]);
+        let _guard = env_lock::lock_env([("GHOSTY_PATH_ROOT", Some(root_path.as_str()))]);
 
         let registration = gemini_oauth_inventory();
         let configured = registration
@@ -327,7 +327,7 @@ mod tests {
     fn kimi_code_inventory_configured_uses_token_cache() {
         let root = tempfile::tempdir().unwrap();
         let root_path = root.path().to_string_lossy().to_string();
-        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", Some(root_path.as_str()))]);
+        let _guard = env_lock::lock_env([("GHOSTY_PATH_ROOT", Some(root_path.as_str()))]);
 
         let registration = kimi_code_inventory();
         let configured = registration

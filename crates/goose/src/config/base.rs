@@ -27,8 +27,32 @@ fn secrets_lock_path(path: &Path) -> PathBuf {
     PathBuf::from(lock_path)
 }
 
+// ─── Compatibilidad con instalaciones de goose ────────────────────────────────
+// Las claves de config son también nombres de variable de entorno (`GHOSTY_MODE`
+// se lee de `env` y luego de config.yaml por el MISMO nombre). Una instalación
+// que venga de goose las tiene como `GOOSE_*`: se leen como respaldo, nunca se
+// escriben. `migrations::migrate_goose_keys` las renombra en config.yaml al
+// cargarla.
+
+/// `GHOSTY_FOO` → `Some("GOOSE_FOO")`; cualquier otra clave → `None`.
+pub(crate) fn legacy_key(key: &str) -> Option<String> {
+    key.strip_prefix("GHOSTY_")
+        .map(|rest| format!("GOOSE_{rest}"))
+}
+
+/// Lee `key` del entorno y, si no está, su equivalente `GOOSE_*`.
+fn env_var_with_legacy(key: &str) -> Result<String, env::VarError> {
+    match env::var(key) {
+        Err(env::VarError::NotPresent) => match legacy_key(key) {
+            Some(legacy) => env::var(legacy),
+            None => Err(env::VarError::NotPresent),
+        },
+        other => other,
+    }
+}
+
 #[cfg(feature = "system-keyring")]
-const KEYRING_SERVICE: &str = "goose";
+const KEYRING_SERVICE: &str = "ghosty-lite";
 #[cfg(feature = "system-keyring")]
 const KEYRING_USERNAME: &str = "secrets";
 pub const CONFIG_YAML_NAME: &str = "config.yaml";
@@ -98,7 +122,7 @@ impl From<keyring::Error> for ConfigError {
 ///
 /// Secrets are loaded with the following precedence:
 /// 1. Environment variables (exact key match)
-/// 2. System keyring (which can be disabled with GOOSE_DISABLE_KEYRING)
+/// 2. System keyring (which can be disabled with GHOSTY_DISABLE_KEYRING)
 /// 3. If the keyring is disabled, secrets are stored in a secrets file
 ///    (~/.config/goose/secrets.yaml by default)
 ///
@@ -152,7 +176,7 @@ enum SecretStorage {
 static GLOBAL_CONFIG: OnceCell<Config> = OnceCell::new();
 
 #[cfg(test)]
-pub(crate) const TEST_SYSTEM_CONFIG_PATH_ENV: &str = "GOOSE_TEST_SYSTEM_CONFIG_PATH";
+pub(crate) const TEST_SYSTEM_CONFIG_PATH_ENV: &str = "GHOSTY_TEST_SYSTEM_CONFIG_PATH";
 
 fn system_config_path() -> PathBuf {
     #[cfg(test)]
@@ -173,7 +197,7 @@ fn system_config_path() -> PathBuf {
 }
 
 fn additional_config_paths_from_env() -> Vec<PathBuf> {
-    env::var_os("GOOSE_ADDITIONAL_CONFIG_FILES")
+    env::var_os("GHOSTY_ADDITIONAL_CONFIG_FILES")
         .map(|value| env::split_paths(&value).collect())
         .unwrap_or_default()
 }
@@ -215,9 +239,9 @@ impl Default for Config {
             secrets_cache: Arc::new(Mutex::new(None)),
         };
 
-        let keyring_disabled = env::var("GOOSE_DISABLE_KEYRING").is_ok()
+        let keyring_disabled = env::var("GHOSTY_DISABLE_KEYRING").is_ok()
             || no_secrets_config
-                .get_param::<serde_yaml::Value>("GOOSE_DISABLE_KEYRING")
+                .get_param::<serde_yaml::Value>("GHOSTY_DISABLE_KEYRING")
                 .is_ok_and(|v| keyring_disabled_value(&v));
         let secrets = secret_storage(&config_dir, keyring_disabled, default_keyring_service());
         Self {
@@ -369,7 +393,7 @@ fn merge_nested_entries(base: &mut Mapping, overlay: &Mapping) {
     }
 }
 
-/// Read the GOOSE_DISABLE_KEYRING flag from the config file.
+/// Read the GHOSTY_DISABLE_KEYRING flag from the config file.
 ///
 /// Called before Config is fully initialised, so we do a minimal raw read
 /// rather than going through `get_param`.  All errors are treated as `false`
@@ -378,7 +402,7 @@ fn keyring_disabled_in_config(config_path: &Path) -> bool {
     std::fs::read_to_string(config_path)
         .ok()
         .and_then(|s| parse_yaml_content(&s).ok())
-        .and_then(|m| m.get("GOOSE_DISABLE_KEYRING").map(keyring_disabled_value))
+        .and_then(|m| m.get("GHOSTY_DISABLE_KEYRING").map(keyring_disabled_value))
         .unwrap_or(false)
 }
 
@@ -432,7 +456,7 @@ impl Config {
     pub fn new<P: AsRef<Path>>(config_path: P, service: &str) -> Result<Self, ConfigError> {
         let config_path = config_path.as_ref().to_path_buf();
         let keyring_disabled =
-            env::var("GOOSE_DISABLE_KEYRING").is_ok() || keyring_disabled_in_config(&config_path);
+            env::var("GHOSTY_DISABLE_KEYRING").is_ok() || keyring_disabled_in_config(&config_path);
         let config_dir = config_path
             .parent()
             .map(Path::to_path_buf)
@@ -586,11 +610,11 @@ impl Config {
                 .zip(serde_json::to_value(v).ok())
         }));
 
-        if let Ok(provider) = self.get_goose_provider() {
-            map.insert("GOOSE_PROVIDER".to_string(), Value::String(provider));
+        if let Ok(provider) = self.get_ghosty_provider() {
+            map.insert("GHOSTY_PROVIDER".to_string(), Value::String(provider));
         }
-        if let Ok(model) = self.get_goose_model() {
-            map.insert("GOOSE_MODEL".to_string(), Value::String(model));
+        if let Ok(model) = self.get_ghosty_model() {
+            map.insert("GHOSTY_MODEL".to_string(), Value::String(model));
         }
 
         Ok(map)
@@ -766,7 +790,7 @@ impl Config {
     /// - There is an error reading the config file
     pub fn get_param<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<T, ConfigError> {
         let env_key = key.to_uppercase();
-        if let Ok(val) = env::var(&env_key) {
+        if let Ok(val) = env_var_with_legacy(&env_key) {
             let value = Self::parse_env_value(&val)?;
             return Ok(serde_json::from_value(value)?);
         }
@@ -774,6 +798,7 @@ impl Config {
         let values = self.load()?;
         let value = values
             .get(key)
+            .or_else(|| legacy_key(key).and_then(|legacy| values.get(legacy.as_str())))
             .ok_or_else(|| ConfigError::NotFound(key.to_string()))?;
 
         match serde_yaml::from_value(value.clone()) {
@@ -882,7 +907,7 @@ impl Config {
     pub fn get_secret<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<T, ConfigError> {
         // First check environment variables (convert to uppercase)
         let env_key = key.to_uppercase();
-        if let Ok(val) = env::var(&env_key) {
+        if let Ok(val) = env_var_with_legacy(&env_key) {
             let value = Self::parse_env_value(&val)?;
             return Ok(serde_json::from_value(value)?);
         }
@@ -891,6 +916,7 @@ impl Config {
         let values = self.all_secrets()?;
         values
             .get(key)
+            .or_else(|| legacy_key(key).and_then(|legacy| values.get(legacy.as_str())))
             .ok_or_else(|| ConfigError::NotFound(key.to_string()))
             .and_then(|v| Ok(serde_json::from_value(v.clone())?))
     }
@@ -933,7 +959,7 @@ impl Config {
                     Err(KeyringReadError::TimedOut) => {
                         tracing::warn!(
                             "keyring read timed out after 3s; not falling back to file \
-                             storage (set GOOSE_DISABLE_KEYRING=1 to skip the keyring)"
+                             storage (set GHOSTY_DISABLE_KEYRING=1 to skip the keyring)"
                         );
                         Err(ConfigError::KeyringTimeout)
                     }
@@ -1221,7 +1247,7 @@ impl Config {
         fallback_values: Option<&HashMap<String, Value>>,
     ) -> Result<T, ConfigError> {
         if self.is_keyring_availability_error(&keyring_err.to_string()) {
-            std::env::set_var("GOOSE_DISABLE_KEYRING", "1");
+            std::env::set_var("GHOSTY_DISABLE_KEYRING", "1");
             tracing::warn!("Keyring unavailable. Using file storage for secrets.");
 
             if let Some(values) = fallback_values {
@@ -1267,11 +1293,11 @@ config_value!(CODEX_ENABLE_SKILLS, String, "true");
 config_value!(CODEX_SKIP_GIT_CHECK, String, "false");
 config_value!(CHATGPT_CODEX_REASONING_EFFORT, String, "medium");
 
-config_value!(GOOSE_SEARCH_PATHS, Vec<String>);
-config_value!(GOOSE_MODE, GooseMode);
+config_value!(GHOSTY_SEARCH_PATHS, Vec<String>);
+config_value!(GHOSTY_MODE, GooseMode);
 impl Config {
-    pub(crate) fn get_goose_mode_strict(&self) -> Result<GooseMode, ConfigError> {
-        match env::var("GOOSE_MODE") {
+    pub(crate) fn get_ghosty_mode_strict(&self) -> Result<GooseMode, ConfigError> {
+        match env::var("GHOSTY_MODE") {
             Ok(value) => {
                 let value = Self::parse_env_value(&value)?;
                 Ok(serde_json::from_value(value)?)
@@ -1279,36 +1305,36 @@ impl Config {
             Err(env::VarError::NotPresent) => {
                 let values = self.load_strict()?;
                 let value = values
-                    .get("GOOSE_MODE")
-                    .ok_or_else(|| ConfigError::NotFound("GOOSE_MODE".to_string()))?;
+                    .get("GHOSTY_MODE")
+                    .ok_or_else(|| ConfigError::NotFound("GHOSTY_MODE".to_string()))?;
                 Ok(serde_yaml::from_value(value.clone())?)
             }
             Err(env::VarError::NotUnicode(_)) => Err(ConfigError::DeserializeError(
-                "GOOSE_MODE contains non-Unicode data".to_string(),
+                "GHOSTY_MODE contains non-Unicode data".to_string(),
             )),
         }
     }
 }
-// GOOSE_PROVIDER and GOOSE_MODEL are handled by crate::config::providers
+// GHOSTY_PROVIDER and GHOSTY_MODEL are handled by crate::config::providers
 // which checks the structured `providers:` block first and falls back to
 // the legacy flat keys. The accessors below delegate to that module.
 impl Config {
-    pub fn get_goose_provider(&self) -> Result<String, ConfigError> {
+    pub fn get_ghosty_provider(&self) -> Result<String, ConfigError> {
         crate::config::providers::get_active_provider(self)
-            .ok_or_else(|| ConfigError::NotFound("GOOSE_PROVIDER".to_string()))
+            .ok_or_else(|| ConfigError::NotFound("GHOSTY_PROVIDER".to_string()))
     }
-    pub fn set_goose_provider(&self, v: impl Into<String>) -> Result<(), ConfigError> {
+    pub fn set_ghosty_provider(&self, v: impl Into<String>) -> Result<(), ConfigError> {
         let name = v.into();
         let model = crate::config::providers::get_provider_entry(self, &name)
             .map(|e| e.model)
             .unwrap_or_default();
         crate::config::providers::set_active_provider(self, &name, &model)
     }
-    pub fn get_goose_model(&self) -> Result<String, ConfigError> {
+    pub fn get_ghosty_model(&self) -> Result<String, ConfigError> {
         crate::config::providers::get_active_model(self)
-            .ok_or_else(|| ConfigError::NotFound("GOOSE_MODEL".to_string()))
+            .ok_or_else(|| ConfigError::NotFound("GHOSTY_MODEL".to_string()))
     }
-    pub fn set_goose_model(&self, v: impl Into<String>) -> Result<(), ConfigError> {
+    pub fn set_ghosty_model(&self, v: impl Into<String>) -> Result<(), ConfigError> {
         let model = v.into();
         if let Some(provider) = crate::config::providers::get_active_provider(self) {
             crate::config::providers::set_active_provider(self, &provider, &model)?;
@@ -1316,16 +1342,16 @@ impl Config {
         Ok(())
     }
 }
-config_value!(GOOSE_PROMPT_EDITOR, Option<String>);
-config_value!(GOOSE_PROMPT_EDITOR_ALWAYS, Option<bool>);
-config_value!(GOOSE_MAX_ACTIVE_AGENTS, usize);
-config_value!(GOOSE_DISABLE_SESSION_NAMING, bool);
+config_value!(GHOSTY_PROMPT_EDITOR, Option<String>);
+config_value!(GHOSTY_PROMPT_EDITOR_ALWAYS, Option<bool>);
+config_value!(GHOSTY_MAX_ACTIVE_AGENTS, usize);
+config_value!(GHOSTY_DISABLE_SESSION_NAMING, bool);
 
 impl Config {
-    pub fn get_goose_context_limit(&self) -> Result<Option<usize>, ConfigError> {
-        match self.get_param::<usize>("GOOSE_CONTEXT_LIMIT") {
+    pub fn get_ghosty_context_limit(&self) -> Result<Option<usize>, ConfigError> {
+        match self.get_param::<usize>("GHOSTY_CONTEXT_LIMIT") {
             Ok(0) => Err(ConfigError::DeserializeError(
-                "GOOSE_CONTEXT_LIMIT must be greater than 0".to_string(),
+                "GHOSTY_CONTEXT_LIMIT must be greater than 0".to_string(),
             )),
             Ok(limit) => Ok(Some(limit)),
             Err(ConfigError::NotFound(_)) => Ok(None),
@@ -1333,10 +1359,10 @@ impl Config {
         }
     }
 
-    pub fn get_goose_max_tokens(&self) -> Result<Option<i32>, ConfigError> {
-        match self.get_param::<i32>("GOOSE_MAX_TOKENS") {
+    pub fn get_ghosty_max_tokens(&self) -> Result<Option<i32>, ConfigError> {
+        match self.get_param::<i32>("GHOSTY_MAX_TOKENS") {
             Ok(tokens) if tokens <= 0 => Err(ConfigError::DeserializeError(
-                "GOOSE_MAX_TOKENS must be greater than 0".to_string(),
+                "GHOSTY_MAX_TOKENS must be greater than 0".to_string(),
             )),
             Ok(tokens) => Ok(Some(tokens)),
             Err(ConfigError::NotFound(_)) => Ok(None),
@@ -1344,23 +1370,23 @@ impl Config {
         }
     }
 
-    pub fn get_goose_docs_root(&self) -> Result<Option<String>, ConfigError> {
-        match self.get_param::<String>("GOOSE_DOCS_ROOT") {
+    pub fn get_ghosty_docs_root(&self) -> Result<Option<String>, ConfigError> {
+        match self.get_param::<String>("GHOSTY_DOCS_ROOT") {
             Ok(root) => Ok(Some(root.trim().to_string()).filter(|root| !root.is_empty())),
             Err(ConfigError::NotFound(_)) => Ok(None),
             Err(e) => Err(e),
         }
     }
 
-    pub fn get_goose_thinking_effort(&self) -> Option<ThinkingEffort> {
-        self.get_param::<String>("GOOSE_THINKING_EFFORT")
+    pub fn get_ghosty_thinking_effort(&self) -> Option<ThinkingEffort> {
+        self.get_param::<String>("GHOSTY_THINKING_EFFORT")
             .ok()
             .and_then(|e| e.parse().ok())
             .or_else(|| self.legacy_thinking_effort())
     }
 
-    pub fn set_goose_thinking_effort(&self, v: ThinkingEffort) -> Result<(), ConfigError> {
-        self.set_param("GOOSE_THINKING_EFFORT", v)
+    pub fn set_ghosty_thinking_effort(&self, v: ThinkingEffort) -> Result<(), ConfigError> {
+        self.set_param("GHOSTY_THINKING_EFFORT", v)
     }
 
     pub fn get_openai_store(&self) -> Option<bool> {
@@ -1404,7 +1430,7 @@ impl Config {
     }
 }
 
-config_value!(GOOSE_DEFAULT_EXTENSION_TIMEOUT, u64);
+config_value!(GHOSTY_DEFAULT_EXTENSION_TIMEOUT, u64);
 
 fn find_workspace_or_exe_root() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
@@ -2529,12 +2555,12 @@ mod tests {
         // Base (system) config
         std::fs::write(
             base_file.path(),
-            "GOOSE_PROVIDER: openai\nGOOSE_MODEL: gpt-4\n",
+            "GHOSTY_PROVIDER: openai\nGHOSTY_MODEL: gpt-4\n",
         )
         .unwrap();
 
         // User config overrides model
-        std::fs::write(user_file.path(), "GOOSE_MODEL: gpt-4o\n").unwrap();
+        std::fs::write(user_file.path(), "GHOSTY_MODEL: gpt-4o\n").unwrap();
 
         let config = Config::new_with_config_paths(
             vec![
@@ -2544,12 +2570,12 @@ mod tests {
             secrets_file.path(),
         )?;
 
-        // GOOSE_MODEL should be overridden by later config
-        let model: String = config.get_param("GOOSE_MODEL")?;
+        // GHOSTY_MODEL should be overridden by later config
+        let model: String = config.get_param("GHOSTY_MODEL")?;
         assert_eq!(model, "gpt-4o");
 
-        // GOOSE_PROVIDER should still come from base
-        let provider: String = config.get_param("GOOSE_PROVIDER")?;
+        // GHOSTY_PROVIDER should still come from base
+        let provider: String = config.get_param("GHOSTY_PROVIDER")?;
         assert_eq!(provider, "openai");
 
         Ok(())
@@ -2788,116 +2814,116 @@ extensions:
     }
 
     #[test]
-    fn get_goose_context_limit_reads_env() {
-        let _guard = env_lock::lock_env([("GOOSE_CONTEXT_LIMIT", Some("4096"))]);
+    fn get_ghosty_context_limit_reads_env() {
+        let _guard = env_lock::lock_env([("GHOSTY_CONTEXT_LIMIT", Some("4096"))]);
         let config = new_test_config();
 
-        assert_eq!(config.get_goose_context_limit().unwrap(), Some(4096));
+        assert_eq!(config.get_ghosty_context_limit().unwrap(), Some(4096));
     }
 
     #[test]
-    fn get_goose_context_limit_reads_quoted_yaml_value() {
-        let _guard = env_lock::lock_env([("GOOSE_CONTEXT_LIMIT", None::<&str>)]);
+    fn get_ghosty_context_limit_reads_quoted_yaml_value() {
+        let _guard = env_lock::lock_env([("GHOSTY_CONTEXT_LIMIT", None::<&str>)]);
         let config = new_test_config();
-        config.set_param("GOOSE_CONTEXT_LIMIT", "200000").unwrap();
+        config.set_param("GHOSTY_CONTEXT_LIMIT", "200000").unwrap();
 
-        assert_eq!(config.get_goose_context_limit().unwrap(), Some(200_000));
+        assert_eq!(config.get_ghosty_context_limit().unwrap(), Some(200_000));
     }
 
     #[test]
-    fn get_goose_context_limit_returns_none_when_not_set() {
-        let _guard = env_lock::lock_env([("GOOSE_CONTEXT_LIMIT", None::<&str>)]);
+    fn get_ghosty_context_limit_returns_none_when_not_set() {
+        let _guard = env_lock::lock_env([("GHOSTY_CONTEXT_LIMIT", None::<&str>)]);
         let config = new_test_config();
 
-        assert_eq!(config.get_goose_context_limit().unwrap(), None);
+        assert_eq!(config.get_ghosty_context_limit().unwrap(), None);
     }
 
     #[test]
-    fn get_goose_context_limit_rejects_zero() {
-        let _guard = env_lock::lock_env([("GOOSE_CONTEXT_LIMIT", Some("0"))]);
+    fn get_ghosty_context_limit_rejects_zero() {
+        let _guard = env_lock::lock_env([("GHOSTY_CONTEXT_LIMIT", Some("0"))]);
         let config = new_test_config();
 
         assert!(matches!(
-            config.get_goose_context_limit().unwrap_err(),
+            config.get_ghosty_context_limit().unwrap_err(),
             ConfigError::DeserializeError(_)
         ));
     }
 
     #[test]
-    fn get_goose_max_tokens_reads_env() {
-        let _guard = env_lock::lock_env([("GOOSE_MAX_TOKENS", Some("4096"))]);
+    fn get_ghosty_max_tokens_reads_env() {
+        let _guard = env_lock::lock_env([("GHOSTY_MAX_TOKENS", Some("4096"))]);
         let config = new_test_config();
 
-        assert_eq!(config.get_goose_max_tokens().unwrap(), Some(4096));
+        assert_eq!(config.get_ghosty_max_tokens().unwrap(), Some(4096));
     }
 
     #[test]
-    fn get_goose_max_tokens_returns_none_when_not_set() {
-        let _guard = env_lock::lock_env([("GOOSE_MAX_TOKENS", None::<&str>)]);
+    fn get_ghosty_max_tokens_returns_none_when_not_set() {
+        let _guard = env_lock::lock_env([("GHOSTY_MAX_TOKENS", None::<&str>)]);
         let config = new_test_config();
 
-        assert_eq!(config.get_goose_max_tokens().unwrap(), None);
+        assert_eq!(config.get_ghosty_max_tokens().unwrap(), None);
     }
 
     #[test]
-    fn get_goose_max_tokens_rejects_invalid_values() {
+    fn get_ghosty_max_tokens_rejects_invalid_values() {
         for value in ["not_a_number", "0", "-100"] {
-            let _guard = env_lock::lock_env([("GOOSE_MAX_TOKENS", Some(value))]);
+            let _guard = env_lock::lock_env([("GHOSTY_MAX_TOKENS", Some(value))]);
             let config = new_test_config();
 
             assert!(matches!(
-                config.get_goose_max_tokens().unwrap_err(),
+                config.get_ghosty_max_tokens().unwrap_err(),
                 ConfigError::DeserializeError(_)
             ));
         }
     }
 
     #[test]
-    fn get_goose_docs_root_reads_config_file() {
-        let _guard = env_lock::lock_env([("GOOSE_DOCS_ROOT", None::<&str>)]);
+    fn get_ghosty_docs_root_reads_config_file() {
+        let _guard = env_lock::lock_env([("GHOSTY_DOCS_ROOT", None::<&str>)]);
         let config = new_test_config();
         config
-            .set_param("GOOSE_DOCS_ROOT", "/tmp/goose-docs")
+            .set_param("GHOSTY_DOCS_ROOT", "/tmp/goose-docs")
             .unwrap();
 
         assert_eq!(
-            config.get_goose_docs_root().unwrap(),
+            config.get_ghosty_docs_root().unwrap(),
             Some("/tmp/goose-docs".to_string())
         );
     }
 
     #[test]
-    fn get_goose_docs_root_reads_env_value() {
-        let _guard = env_lock::lock_env([("GOOSE_DOCS_ROOT", Some("/tmp/env-docs"))]);
+    fn get_ghosty_docs_root_reads_env_value() {
+        let _guard = env_lock::lock_env([("GHOSTY_DOCS_ROOT", Some("/tmp/env-docs"))]);
         let config = new_test_config();
 
         assert_eq!(
-            config.get_goose_docs_root().unwrap(),
+            config.get_ghosty_docs_root().unwrap(),
             Some("/tmp/env-docs".to_string())
         );
     }
 
     #[test]
-    fn get_goose_docs_root_returns_none_when_unset() {
-        let _guard = env_lock::lock_env([("GOOSE_DOCS_ROOT", None::<&str>)]);
+    fn get_ghosty_docs_root_returns_none_when_unset() {
+        let _guard = env_lock::lock_env([("GHOSTY_DOCS_ROOT", None::<&str>)]);
         let config = new_test_config();
 
-        assert_eq!(config.get_goose_docs_root().unwrap(), None);
+        assert_eq!(config.get_ghosty_docs_root().unwrap(), None);
     }
 
     #[test]
-    fn get_goose_docs_root_ignores_blank_value() {
-        let _guard = env_lock::lock_env([("GOOSE_DOCS_ROOT", None::<&str>)]);
+    fn get_ghosty_docs_root_ignores_blank_value() {
+        let _guard = env_lock::lock_env([("GHOSTY_DOCS_ROOT", None::<&str>)]);
         let config = new_test_config();
-        config.set_param("GOOSE_DOCS_ROOT", "   ").unwrap();
+        config.set_param("GHOSTY_DOCS_ROOT", "   ").unwrap();
 
-        assert_eq!(config.get_goose_docs_root().unwrap(), None);
+        assert_eq!(config.get_ghosty_docs_root().unwrap(), None);
     }
 
     #[test]
-    fn get_goose_thinking_effort_reads_env() {
+    fn get_ghosty_thinking_effort_reads_env() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_THINKING_EFFORT", Some("high")),
+            ("GHOSTY_THINKING_EFFORT", Some("high")),
             ("CLAUDE_THINKING_TYPE", None::<&str>),
             ("CLAUDE_THINKING_ENABLED", None::<&str>),
             ("GEMINI3_THINKING_LEVEL", None::<&str>),
@@ -2905,16 +2931,16 @@ extensions:
         let config = new_test_config();
 
         assert_eq!(
-            config.get_goose_thinking_effort(),
+            config.get_ghosty_thinking_effort(),
             Some(ThinkingEffort::High)
         );
     }
 
     #[test]
-    fn get_goose_thinking_effort_uses_legacy_claude_fallback() {
+    fn get_ghosty_thinking_effort_uses_legacy_claude_fallback() {
         for value in ["enabled", "adaptive"] {
             let _guard = env_lock::lock_env([
-                ("GOOSE_THINKING_EFFORT", None::<&str>),
+                ("GHOSTY_THINKING_EFFORT", None::<&str>),
                 ("CLAUDE_THINKING_TYPE", Some(value)),
                 ("CLAUDE_THINKING_ENABLED", None::<&str>),
                 ("GEMINI3_THINKING_LEVEL", None::<&str>),
@@ -2922,16 +2948,16 @@ extensions:
             let config = new_test_config();
 
             assert_eq!(
-                config.get_goose_thinking_effort(),
+                config.get_ghosty_thinking_effort(),
                 Some(ThinkingEffort::High)
             );
         }
     }
 
     #[test]
-    fn get_goose_thinking_effort_uses_legacy_gemini3_fallback() {
+    fn get_ghosty_thinking_effort_uses_legacy_gemini3_fallback() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_THINKING_EFFORT", None::<&str>),
+            ("GHOSTY_THINKING_EFFORT", None::<&str>),
             ("CLAUDE_THINKING_TYPE", None::<&str>),
             ("CLAUDE_THINKING_ENABLED", None::<&str>),
             ("GEMINI3_THINKING_LEVEL", Some("high")),
@@ -2939,7 +2965,7 @@ extensions:
         let config = new_test_config();
 
         assert_eq!(
-            config.get_goose_thinking_effort(),
+            config.get_ghosty_thinking_effort(),
             Some(ThinkingEffort::High)
         );
     }

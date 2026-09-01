@@ -24,10 +24,10 @@ async fn resolve_model_config(
 
     let config = crate::config::Config::global();
     let provider_name = config
-        .get_goose_provider()
+        .get_ghosty_provider()
         .map_err(|_| anyhow::anyhow!("missing provider"))?;
     let model_name = config
-        .get_goose_model()
+        .get_ghosty_model()
         .map_err(|_| anyhow::anyhow!("missing model"))?;
     crate::model_config::model_config_from_user_config(&provider_name, &model_name)
 }

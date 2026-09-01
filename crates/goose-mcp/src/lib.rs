@@ -1,15 +1,21 @@
-use etcetera::AppStrategyArgs;
 use once_cell::sync::Lazy;
 use rmcp::{ServerHandler, ServiceExt};
 use std::collections::HashMap;
 
-// NOTE: "Block" is kept here for backwards compatibility with existing
-// user config/data directories. Changing this would orphan existing installations.
-pub static APP_STRATEGY: Lazy<AppStrategyArgs> = Lazy::new(|| AppStrategyArgs {
-    top_level_domain: "Block".to_string(),
-    author: "Block".to_string(),
-    app_name: "goose".to_string(),
-});
+/// Raíz de estado de ghosty-lite para los servidores MCP builtin: la misma
+/// que resuelve `goose::config::paths::Paths` (GHOSTY_PATH_ROOT, o
+/// `~/.ghosty-lite`). No dependemos del crate goose para no crear un ciclo.
+pub fn ghosty_home() -> std::path::PathBuf {
+    if let Some(root) = std::env::var_os("GHOSTY_PATH_ROOT") {
+        let root = std::path::PathBuf::from(root);
+        if root.is_absolute() {
+            return root;
+        }
+    }
+    etcetera::home_dir()
+        .map(|h| h.join(".ghosty-lite"))
+        .unwrap_or_else(|_| std::path::PathBuf::from(".ghosty-lite"))
+}
 
 pub mod computercontroller;
 pub mod mcp_server_runner;

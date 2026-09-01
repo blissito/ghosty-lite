@@ -2095,7 +2095,7 @@ mod tests {
 
     #[test]
     fn test_responses_request_non_reasoning_model_ignores_global_thinking_effort() {
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", Some("high"))]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", Some("high"))]);
         let model_config = ModelConfig {
             model_name: "gpt-4o".to_string(),
             context_limit: None,

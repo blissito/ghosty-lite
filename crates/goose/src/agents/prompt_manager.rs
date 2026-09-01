@@ -137,7 +137,7 @@ impl<'a> SystemPromptBuilder<'a, PromptManager> {
 
         let goose_mode = self
             .goose_mode
-            .unwrap_or_else(|| Config::global().get_goose_mode().unwrap_or_default());
+            .unwrap_or_else(|| Config::global().get_ghosty_mode().unwrap_or_default());
 
         let context = SystemPromptContext {
             extensions: sanitized_extensions_info,
@@ -542,7 +542,7 @@ mod tests {
         let temp_root = tmp_dir.path().display().to_string();
         let _guard = env_lock::lock_env([
             ("HOME", Some(temp_root.as_str())),
-            ("GOOSE_PATH_ROOT", Some(temp_root.as_str())),
+            ("GHOSTY_PATH_ROOT", Some(temp_root.as_str())),
         ]);
         let session_manager = Arc::new(SessionManager::new(tmp_dir.path().to_path_buf()));
         let session = session_manager

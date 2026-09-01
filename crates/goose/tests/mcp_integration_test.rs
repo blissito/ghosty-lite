@@ -176,10 +176,10 @@ async fn test_replayed_session(
     fs::create_dir_all(TEST_WORKING_DIR).ok();
 
     let _env = env_lock::lock_env([
-        ("GOOSE_MCP_CLIENT_VERSION", Some("0.0.0")),
-        ("GOOSE_PROVIDER", Some("openai")),
-        ("GOOSE_MODEL", Some("gpt-4o")),
-        ("GOOSE_WORKING_DIR", Some(TEST_WORKING_DIR)),
+        ("GHOSTY_MCP_CLIENT_VERSION", Some("0.0.0")),
+        ("GHOSTY_PROVIDER", Some("openai")),
+        ("GHOSTY_MODEL", Some("gpt-4o")),
+        ("GHOSTY_WORKING_DIR", Some(TEST_WORKING_DIR)),
     ]);
 
     // Setup test file for developer extension tests
@@ -196,7 +196,7 @@ async fn test_replayed_session(
     replay_file_path.push("mcp_replays");
     replay_file_path.push(&replay_file_name);
 
-    let mode = if env::var("GOOSE_RECORD_MCP").is_ok() {
+    let mode = if env::var("GHOSTY_RECORD_MCP").is_ok() {
         TestMode::Record
     } else {
         assert!(replay_file_path.exists(), "replay file doesn't exist");

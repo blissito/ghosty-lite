@@ -92,15 +92,15 @@ fn unix_shell_command_args(command_line: &str) -> [&str; 2] {
 }
 
 /// Resolve the shell used to run Developer extension commands on Windows,
-/// respecting `GOOSE_SHELL`.
+/// respecting `GHOSTY_SHELL`.
 ///
-/// Defaults to `cmd` when `GOOSE_SHELL` is unset. The invocation flags are
+/// Defaults to `cmd` when `GHOSTY_SHELL` is unset. The invocation flags are
 /// chosen automatically from the executable name in `build_shell_command`,
 /// so callers only ever provide a bare executable path or name — see that
 /// function for the flag mapping.
 #[cfg(windows)]
 fn windows_shell() -> String {
-    std::env::var("GOOSE_SHELL").unwrap_or_else(|_| "cmd".to_string())
+    std::env::var("GHOSTY_SHELL").unwrap_or_else(|_| "cmd".to_string())
 }
 
 /// Short, human-readable name of a shell path (the file stem), used both to
@@ -142,10 +142,10 @@ pub fn shell_display_name() -> String {
 /// nu, ...) reject or mis-interpret these, so we don't auto-select based
 /// on `$SHELL`: we check whether `bash` is on PATH and otherwise fall back
 /// to `sh`. Users who really want their login shell can opt in via
-/// `GOOSE_SHELL`.
+/// `GHOSTY_SHELL`.
 #[cfg(not(windows))]
 fn unix_shell() -> String {
-    if let Ok(shell) = std::env::var("GOOSE_SHELL") {
+    if let Ok(shell) = std::env::var("GHOSTY_SHELL") {
         return shell;
     }
     if which::which("bash").is_ok() {
@@ -394,7 +394,7 @@ impl ShellTool {
             return Self::error_result(
                 "cmd.exe silently truncates commands at newlines — only the first line executes, \
                  with exit code 0. Use `&` to chain commands on one line \
-                 (e.g. `echo a & echo b`), or set GOOSE_SHELL=powershell.",
+                 (e.g. `echo a & echo b`), or set GHOSTY_SHELL=powershell.",
                 None,
             );
         }
@@ -549,7 +549,7 @@ struct ExecutionOutput {
 fn resolve_shell_timeout(timeout_secs: Option<u64>) -> u64 {
     timeout_secs.unwrap_or_else(|| {
         crate::config::Config::global()
-            .get_goose_default_extension_timeout()
+            .get_ghosty_default_extension_timeout()
             .unwrap_or(crate::config::DEFAULT_EXTENSION_TIMEOUT)
     })
 }
@@ -670,7 +670,7 @@ async fn run_command(
 /// Build the `Command` that executes a single command line via the configured shell.
 ///
 /// The invocation flags are selected automatically from the shell executable
-/// name, so setting `GOOSE_SHELL` to a bare executable is enough — users never
+/// name, so setting `GHOSTY_SHELL` to a bare executable is enough — users never
 /// need to supply command-style flags themselves:
 ///
 /// - PowerShell (`pwsh`, `powershell`) → `-NoProfile -NonInteractive -Command`

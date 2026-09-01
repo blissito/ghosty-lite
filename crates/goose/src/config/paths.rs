@@ -1,4 +1,3 @@
-use etcetera::{choose_app_strategy, AppStrategy, AppStrategyArgs};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -16,29 +15,30 @@ impl Paths {
                 DirType::AgentsHome => base.join(".agents"),
             }
         } else {
-            // NOTE: "Block" is kept here for backwards compatibility with existing
-            // user config/data directories (e.g. ~/Library/Application Support/Block/goose/).
-            // Changing this would orphan existing installations.
-            let strategy = choose_app_strategy(AppStrategyArgs {
-                top_level_domain: "Block".to_string(),
-                author: "Block".to_string(),
-                app_name: "goose".to_string(),
-            })
-            .expect("goose requires a home dir");
-
+            // Sin GHOSTY_PATH_ROOT, todo vive en ~/.ghosty-lite. A propósito NO es
+            // ~/.ghosty (la home de ghostycode) ni la ruta de etcetera de goose:
+            // los tres productos conviven en la misma máquina sin pisarse.
+            let base = Self::default_home();
             match dir_type {
-                DirType::Config => strategy.config_dir(),
-                DirType::Data => strategy.data_dir(),
-                DirType::State => strategy.state_dir().unwrap_or(strategy.data_dir()),
-                DirType::Plugins => strategy.home_dir().join(".agents").join("plugins"),
-                DirType::Agents => strategy.home_dir().join(".agents").join("agents"),
-                DirType::AgentsHome => strategy.home_dir().join(".agents"),
+                DirType::Config => base.join("config"),
+                DirType::Data => base.join("data"),
+                DirType::State => base.join("state"),
+                DirType::Plugins => base.join(".agents").join("plugins"),
+                DirType::Agents => base.join(".agents").join("agents"),
+                DirType::AgentsHome => base.join(".agents"),
             }
         }
     }
 
+    /// `$HOME/.ghosty-lite`, o el directorio actual si no hay HOME.
+    pub fn default_home() -> PathBuf {
+        etcetera::home_dir()
+            .map(|h| h.join(".ghosty-lite"))
+            .unwrap_or_else(|_| PathBuf::from(".ghosty-lite"))
+    }
+
     pub(crate) fn path_root() -> Option<PathBuf> {
-        Self::validated_path_root(std::env::var_os("GOOSE_PATH_ROOT"))
+        Self::validated_path_root(std::env::var_os("GHOSTY_PATH_ROOT"))
     }
 
     fn validated_path_root(value: Option<OsString>) -> Option<PathBuf> {

@@ -287,7 +287,7 @@ mod tests {
     }
 
     fn discover_with_config(project: &Path, config: &Config) -> Vec<DiscoveredPlugin> {
-        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", None::<&str>)]);
+        let _guard = env_lock::lock_env([("GHOSTY_PATH_ROOT", None::<&str>)]);
         discover_enabled_plugins_with_config(Some(project), config)
     }
 
@@ -393,8 +393,10 @@ mod tests {
 
         let cfg_dir = tempfile::tempdir().unwrap();
         let found = {
-            let _guard =
-                env_lock::lock_env([("GOOSE_PATH_ROOT", Some(fake_home.path().to_str().unwrap()))]);
+            let _guard = env_lock::lock_env([(
+                "GHOSTY_PATH_ROOT",
+                Some(fake_home.path().to_str().unwrap()),
+            )]);
             discover_enabled_plugins_with_config(Some(project), &test_config(cfg_dir.path()))
         };
 
@@ -432,7 +434,7 @@ mod tests {
             )
             .unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -535,7 +537,7 @@ mod tests {
         let config_dir = tempfile::tempdir().unwrap();
         let config = test_config(config_dir.path());
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 

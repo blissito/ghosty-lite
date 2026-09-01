@@ -618,11 +618,11 @@ fn push_or_replace_extension(extensions: &mut Vec<ExtensionConfig>, extension: E
 fn resolve_default_provider_model_config(
     config: &Config,
 ) -> Result<(String, goose_providers::model::ModelConfig), agent_client_protocol::Error> {
-    let resolved_provider = config.get_goose_provider().map_err(|error| {
+    let resolved_provider = config.get_ghosty_provider().map_err(|error| {
         agent_client_protocol::Error::internal_error()
             .data(format!("Failed to resolve provider: {}", error))
     })?;
-    let resolved_model = config.get_goose_model().map_err(|error| {
+    let resolved_model = config.get_ghosty_model().map_err(|error| {
         agent_client_protocol::Error::internal_error()
             .data(format!("Failed to resolve model: {}", error))
     })?;
@@ -917,7 +917,7 @@ impl GooseAcpAgent {
             Arc::clone(&session_manager),
             Arc::clone(&permission_manager),
             options.scheduler,
-            Config::global().get_goose_mode().unwrap_or_default(),
+            Config::global().get_ghosty_mode().unwrap_or_default(),
             options.disable_session_naming,
             options.goose_platform.clone(),
         );
@@ -2403,7 +2403,7 @@ impl GooseAcpAgent {
         let use_default_provider = provider_name == DEFAULT_PROVIDER_ID;
         let resolved_provider_name = if use_default_provider {
             config
-                .get_goose_provider()
+                .get_ghosty_provider()
                 .internal_err_ctx("Failed to resolve default provider from config")?
         } else {
             provider_name.to_string()
@@ -2413,7 +2413,7 @@ impl GooseAcpAgent {
             model_name.to_string()
         } else if use_default_provider {
             config
-                .get_goose_model()
+                .get_ghosty_model()
                 .internal_err_ctx("Failed to resolve default model from config")?
         } else if is_changing_provider {
             crate::providers::get_from_registry(&resolved_provider_name)
@@ -2506,7 +2506,7 @@ where
 
         SacpAgent
             .builder()
-            .name("goose-acp")
+            .name("ghosty-lite")
             .with_handler(handler)
             .connect_to(ByteStreams::new(write, read))
             .await?;
@@ -2540,7 +2540,7 @@ impl agent_client_protocol::ConnectTo<Client> for GooseAgentConnection {
         let handler = GooseAcpHandler { agent };
         SacpAgent
             .builder()
-            .name("goose-acp")
+            .name("ghosty-lite")
             .with_handler(handler)
             .connect_to(client)
             .await

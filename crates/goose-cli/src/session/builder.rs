@@ -350,7 +350,7 @@ async fn resolve_provider_and_model(
         .recipe
         .as_ref()
         .and_then(|r| r.settings.as_ref());
-    let configured_provider = config.get_goose_provider().ok();
+    let configured_provider = config.get_ghosty_provider().ok();
 
     let provider_name = session_config
         .provider
@@ -379,13 +379,13 @@ async fn resolve_provider_and_model(
     });
     let matching_environment_model =
         if provider_overridden && configured_provider.as_deref() == Some(provider_name.as_str()) {
-            std::env::var("GOOSE_MODEL").ok()
+            std::env::var("GHOSTY_MODEL").ok()
         } else {
             None
         };
     let matching_config_model =
         if provider_overridden && configured_provider.as_deref() == Some(provider_name.as_str()) {
-            config.get_goose_model().ok()
+            config.get_ghosty_model().ok()
         } else {
             None
         };
@@ -450,7 +450,7 @@ async fn resolve_provider_and_model(
             if provider_overridden {
                 None
             } else {
-                config.get_goose_model().ok()
+                config.get_ghosty_model().ok()
             }
         })
         .unwrap_or_else(|| {
@@ -696,7 +696,8 @@ async fn configure_session_prompts(
             .await;
     }
 
-    let system_prompt_file: Option<String> = config.get_param("GOOSE_SYSTEM_PROMPT_FILE_PATH").ok();
+    let system_prompt_file: Option<String> =
+        config.get_param("GHOSTY_SYSTEM_PROMPT_FILE_PATH").ok();
     if let Some(ref path) = system_prompt_file {
         let override_prompt = std::fs::read_to_string(path).unwrap_or_else(|e| {
             output::render_error(&format!(
@@ -779,11 +780,11 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
                     && session_config.provider.is_none()
                     && is_provider_unavailable_error(&e) =>
             {
-                let fallback_provider = config.get_goose_provider().unwrap_or_else(|_| {
+                let fallback_provider = config.get_ghosty_provider().unwrap_or_else(|_| {
                     output::render_error("No provider configured. Run 'goose configure' first.");
                     process::exit(1);
                 });
-                let fallback_model = config.get_goose_model().unwrap_or_else(|_| {
+                let fallback_model = config.get_ghosty_model().unwrap_or_else(|_| {
                     output::render_error("No model configured. Run 'goose configure' first.");
                     process::exit(1);
                 });
@@ -892,7 +893,7 @@ pub async fn build_session(session_config: SessionBuilderConfig) -> CliSession {
             }
         });
 
-    let debug_mode = session_config.debug || config.get_param("GOOSE_DEBUG").unwrap_or(false);
+    let debug_mode = session_config.debug || config.get_param("GHOSTY_DEBUG").unwrap_or(false);
 
     let session = CliSession::new(
         Arc::try_unwrap(agent_ptr).unwrap_or_else(|_| panic!("There should be no more references")),
@@ -1108,8 +1109,8 @@ mod tests {
 
     fn clear_provider_env() -> env_lock::EnvGuard<'static> {
         env_lock::lock_env([
-            ("GOOSE_PROVIDER", None::<&str>),
-            ("GOOSE_MODEL", None::<&str>),
+            ("GHOSTY_PROVIDER", None::<&str>),
+            ("GHOSTY_MODEL", None::<&str>),
         ])
     }
 
@@ -1224,8 +1225,8 @@ mod tests {
         let _guard = clear_provider_env();
         let temp_dir = TempDir::new().unwrap();
         let config = test_config(&temp_dir);
-        config.set_param("GOOSE_PROVIDER", "openai").unwrap();
-        config.set_param("GOOSE_MODEL", "my-custom-model").unwrap();
+        config.set_param("GHOSTY_PROVIDER", "openai").unwrap();
+        config.set_param("GHOSTY_MODEL", "my-custom-model").unwrap();
 
         let resolved = resolve_provider_and_model(
             &SessionBuilderConfig {
@@ -1246,8 +1247,8 @@ mod tests {
     #[tokio::test]
     async fn matching_environment_model_overrides_saved_model() {
         let _guard = env_lock::lock_env([
-            ("GOOSE_PROVIDER", Some("openai")),
-            ("GOOSE_MODEL", Some("environment-model")),
+            ("GHOSTY_PROVIDER", Some("openai")),
+            ("GHOSTY_MODEL", Some("environment-model")),
         ]);
         let temp_dir = TempDir::new().unwrap();
         let config = test_config(&temp_dir);
@@ -1318,8 +1319,10 @@ mod tests {
         let _guard = clear_provider_env();
         let temp_dir = TempDir::new().unwrap();
         let config = test_config(&temp_dir);
-        config.set_param("GOOSE_PROVIDER", "openai").unwrap();
-        config.set_param("GOOSE_MODEL", "configured-model").unwrap();
+        config.set_param("GHOSTY_PROVIDER", "openai").unwrap();
+        config
+            .set_param("GHOSTY_MODEL", "configured-model")
+            .unwrap();
         let recipe = serde_json::from_value(serde_json::json!({
             "version": "1.0.0",
             "title": "test recipe",
@@ -1397,9 +1400,9 @@ mod tests {
         let _guard = clear_provider_env();
         let temp_dir = TempDir::new().unwrap();
         let config = test_config(&temp_dir);
-        config.set_param("GOOSE_PROVIDER", "anthropic").unwrap();
+        config.set_param("GHOSTY_PROVIDER", "anthropic").unwrap();
         config
-            .set_param("GOOSE_MODEL", "claude-sonnet-4-6")
+            .set_param("GHOSTY_MODEL", "claude-sonnet-4-6")
             .unwrap();
         let expected_model = goose::providers::get_from_registry("openai")
             .await

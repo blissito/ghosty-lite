@@ -363,7 +363,7 @@ pub async fn spawn_acp_server_in_process(
         fs::write(
             &config_path,
             format!(
-                "GOOSE_MODEL: {current_model}\nGOOSE_PROVIDER: openai\nGOOSE_MODE: {}\nGOOSE_TOOL_PAIR_SUMMARIZATION: false\n",
+                "GHOSTY_MODEL: {current_model}\nGHOSTY_PROVIDER: openai\nGHOSTY_MODE: {}\nGHOSTY_TOOL_PAIR_SUMMARIZATION: false\n",
                 goose_mode
             ),
         )
@@ -799,8 +799,8 @@ where
     F: Future<Output = ()> + Send + 'static,
 {
     let _guard = ACP_TEST_LOCK.lock().unwrap_or_else(|err| err.into_inner());
-    if std::env::var_os("GOOSE_PATH_ROOT").is_none() {
-        std::env::set_var("GOOSE_PATH_ROOT", ACP_CONFIG_ROOT.path());
+    if std::env::var_os("GHOSTY_PATH_ROOT").is_none() {
+        std::env::set_var("GHOSTY_PATH_ROOT", ACP_CONFIG_ROOT.path());
     }
     register_builtin_extensions(goose_mcp::BUILTIN_EXTENSIONS.clone());
 

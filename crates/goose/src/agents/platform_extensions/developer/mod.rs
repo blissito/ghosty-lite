@@ -136,13 +136,13 @@ impl DeveloperClient {
                 let newline_note = if shell == "cmd" {
                     " Commands must be on a single line — cmd.exe silently truncates at the \
                      first newline. Use `&` to chain (e.g. `echo a & echo b`) or set \
-                     GOOSE_SHELL=powershell for multi-line support."
+                     GHOSTY_SHELL=powershell for multi-line support."
                 } else {
                     ""
                 };
                 let description = format!(
                     "Execute a shell command in the current dir. Commands run under `{shell}` \
-                     (set GOOSE_SHELL to override) - write command strings in that shell's \
+                     (set GHOSTY_SHELL to override) - write command strings in that shell's \
                      syntax.{newline_note} Returns an object with stdout and stderr as separate \
                      fields. The output of each stream is limited to up to 2000 lines, and \
                      longer outputs will be saved to a temporary file.",

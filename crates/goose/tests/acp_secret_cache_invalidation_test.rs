@@ -60,7 +60,7 @@ fn write_config(config_dir: &std::path::Path) {
     std::fs::create_dir_all(config_dir).unwrap();
     std::fs::write(
         config_dir.join(goose::config::base::CONFIG_YAML_NAME),
-        "GOOSE_MODEL: gpt-4o\nGOOSE_PROVIDER: openai\nGOOSE_DISABLE_KEYRING: true\n",
+        "GHOSTY_MODEL: gpt-4o\nGHOSTY_PROVIDER: openai\nGHOSTY_DISABLE_KEYRING: true\n",
     )
     .unwrap();
 }
@@ -75,8 +75,8 @@ fn acp_secret_mutations_and_inventory_refresh_invalidate_global_secret_cache() {
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path().to_string_lossy().to_string();
     let _env = env_lock::lock_env([
-        ("GOOSE_PATH_ROOT", Some(root_path.as_str())),
-        ("GOOSE_DISABLE_KEYRING", Some("1")),
+        ("GHOSTY_PATH_ROOT", Some(root_path.as_str())),
+        ("GHOSTY_DISABLE_KEYRING", Some("1")),
         ("ANTHROPIC_API_KEY", None),
         ("GROQ_API_KEY", None),
         ("OPENAI_API_KEY", None),

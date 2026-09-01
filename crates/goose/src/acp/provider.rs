@@ -2303,7 +2303,7 @@ pub(super) fn resolve_effort_value(
         .and_then(|value| map_effort_value(capability, &value))
         .or_else(|| {
             Config::global()
-                .get_goose_thinking_effort()
+                .get_ghosty_thinking_effort()
                 .and_then(|effort| map_effort_value(capability, &effort.to_string()))
         })
 }
@@ -3884,7 +3884,7 @@ mod tests {
     /// current while the client shows the global.
     #[tokio::test]
     async fn apply_effort_if_changed_falls_back_to_the_global_default() {
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", Some("high"))]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", Some("high"))]);
         let (tx, mut rx) = mpsc::channel(1);
         let provider =
             test_provider_with_effort(tx, Some(effort_capability(&["default", "high"], "default")));
@@ -3905,7 +3905,7 @@ mod tests {
     async fn apply_effort_if_changed_skips_unmapped_value() {
         // Unoffered by the capability below, so the global default never wins
         // and the test doesn't depend on the machine's configured value.
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", Some("medium"))]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", Some("medium"))]);
         let (tx, mut rx) = mpsc::channel(1);
         let provider =
             test_provider_with_effort(tx, Some(effort_capability(&["default", "high"], "default")));
@@ -3933,7 +3933,7 @@ mod tests {
 
     #[tokio::test]
     async fn apply_effort_if_changed_skips_session_without_a_persisted_value() {
-        let _guard = env_lock::lock_env([("GOOSE_THINKING_EFFORT", Some("medium"))]);
+        let _guard = env_lock::lock_env([("GHOSTY_THINKING_EFFORT", Some("medium"))]);
         let (tx, mut rx) = mpsc::channel(1);
         let provider =
             test_provider_with_effort(tx, Some(effort_capability(&["default", "high"], "default")));

@@ -366,8 +366,8 @@ mod tests {
     async fn disabled_scheduler_rejects_schedule_operations_without_recipe_writes() {
         let root = tempfile::tempdir().unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_DISABLE_KEYRING", Some("true")),
-            ("GOOSE_PATH_ROOT", root.path().to_str()),
+            ("GHOSTY_DISABLE_KEYRING", Some("true")),
+            ("GHOSTY_PATH_ROOT", root.path().to_str()),
         ]);
         let server = AcpServer::new(AcpServerFactoryConfig {
             builtins: AcpBuiltinSelection::default(),

@@ -21,11 +21,11 @@ export PATH="$SCRIPT_DIR/target/debug:$PATH"
 
 # Set default provider and model if not already set
 # Use fast model for CI to speed up tests
-export GOOSE_PROVIDER="${GOOSE_PROVIDER:-anthropic}"
-export GOOSE_MODEL="${GOOSE_MODEL:-claude-haiku-4-5}"
+export GHOSTY_PROVIDER="${GHOSTY_PROVIDER:-anthropic}"
+export GHOSTY_MODEL="${GHOSTY_MODEL:-claude-haiku-4-5}"
 
-echo "Using provider: $GOOSE_PROVIDER"
-echo "Using model: $GOOSE_MODEL"
+echo "Using provider: $GHOSTY_PROVIDER"
+echo "Using model: $GHOSTY_MODEL"
 echo ""
 
 TESTDIR=$(mktemp -d)

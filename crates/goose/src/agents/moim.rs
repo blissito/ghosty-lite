@@ -64,7 +64,7 @@ pub(super) async fn compute_compaction_info(
         .as_ref()
         .and_then(|session| session.usage.total_tokens);
     let compaction_threshold = crate::config::Config::global()
-        .get_param::<f64>("GOOSE_AUTO_COMPACT_THRESHOLD")
+        .get_param::<f64>("GHOSTY_AUTO_COMPACT_THRESHOLD")
         .unwrap_or(crate::context_mgmt::DEFAULT_COMPACTION_THRESHOLD);
     compaction_remaining_line(total_tokens, context_limit, compaction_threshold)
 }

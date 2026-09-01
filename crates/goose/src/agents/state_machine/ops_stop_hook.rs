@@ -39,7 +39,7 @@ fn block_cap_warning(plugin: &str, cap: u32) -> Message {
         format!(
             "Stop hook `{plugin}` blocked the turn from ending more than {cap} consecutive times \
              \u{2014} overriding and ending turn to avoid an infinite loop. Set \
-             GOOSE_STOP_HOOK_BLOCK_CAP to raise this limit."
+             GHOSTY_STOP_HOOK_BLOCK_CAP to raise this limit."
         ),
     )
 }

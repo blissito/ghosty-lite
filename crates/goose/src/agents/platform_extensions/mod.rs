@@ -184,7 +184,7 @@ pub static PLATFORM_EXTENSIONS: Lazy<HashMap<&'static str, PlatformExtensionDef>
                 name: tom::EXTENSION_NAME,
                 display_name: "Top Of Mind",
                 description:
-                    "Inject custom context into every turn via GOOSE_MOIM_MESSAGE_TEXT and GOOSE_MOIM_MESSAGE_FILE environment variables",
+                    "Inject custom context into every turn via GHOSTY_MOIM_MESSAGE_TEXT and GHOSTY_MOIM_MESSAGE_FILE environment variables",
                 default_enabled: true,
                 unprefixed_tools: false,
                 hidden: false,
@@ -234,10 +234,10 @@ impl PlatformExtensionContext {
 
         let config = crate::config::Config::global();
         let provider_name = config
-            .get_goose_provider()
+            .get_ghosty_provider()
             .map_err(|_| "Could not resolve model config: missing provider".to_string())?;
         let model_name = config
-            .get_goose_model()
+            .get_ghosty_model()
             .map_err(|_| "Could not resolve model config: missing model".to_string())?;
         crate::model_config::model_config_from_user_config(&provider_name, &model_name)
             .map_err(|e| format!("Could not resolve model config: {e}"))

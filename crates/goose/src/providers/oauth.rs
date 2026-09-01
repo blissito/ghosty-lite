@@ -394,7 +394,7 @@ impl OAuthFlow {
 
         // If no port is specified (or port is explicitly 0), let the OS assign one
         // Otherwise, use the requested port
-        let env_port: Option<u16> = std::env::var("GOOSE_OAUTH_CALLBACK_PORT")
+        let env_port: Option<u16> = std::env::var("GHOSTY_OAUTH_CALLBACK_PORT")
             .ok()
             .and_then(|p| p.parse().ok());
         let bind_port = requested_port.or(env_port).unwrap_or(0);

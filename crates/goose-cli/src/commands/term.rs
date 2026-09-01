@@ -56,7 +56,7 @@ fi{command_not_found_handler}"#,
         r#"
 
 command_not_found_handle() {
-    echo "🪿 Command '$1' not found. Asking goose..."
+    echo "👻 Command '$1' not found. Asking goose..."
     '{goose_bin}' term run "$@"
     return 0
 }"#,
@@ -80,7 +80,7 @@ add-zsh-hook preexec goose_preexec{command_not_found_handler}"#,
         r#"
 
 command_not_found_handler() {
-    echo "🪿 Command '$1' not found. Asking goose..."
+    echo "👻 Command '$1' not found. Asking goose..."
     '{goose_bin}' term run "$@"
     return 0
 }"#,
@@ -105,8 +105,8 @@ static NU_CONFIG: ShellConfig = ShellConfig {
 def --wrapped @goose [...args] { run-external "{goose_bin}" "term" "run" ...$args }
 def --wrapped @g [...args] { run-external "{goose_bin}" "term" "run" ...$args }
 
-if (($env | get -o GOOSE_NU_PREEXEC_INSTALLED | default false) != true) {
-    $env.GOOSE_NU_PREEXEC_INSTALLED = true
+if (($env | get -o GHOSTY_NU_PREEXEC_INSTALLED | default false) != true) {
+    $env.GHOSTY_NU_PREEXEC_INSTALLED = true
     $env.config.hooks.pre_execution = (
         $env.config.hooks.pre_execution
         | append {||
@@ -129,7 +129,7 @@ if (($env | get -o GOOSE_NU_PREEXEC_INSTALLED | default false) != true) {
         r#"
 $env.config.hooks.command_not_found = {|command_name|
     let prompt = (try { commandline | str trim } catch { $command_name })
-    print $"🪿 Command '($command_name)' not found. Asking goose..."
+    print $"👻 Command '($command_name)' not found. Asking goose..."
     run-external "{goose_bin}" "term" "run" $prompt | complete | ignore
     null
 }"#,
@@ -200,7 +200,7 @@ pub async fn handle_term_init(
                     working_dir,
                     "Goose Term Session".to_string(),
                     SessionType::Terminal,
-                    Config::global().get_goose_mode().unwrap_or_default(),
+                    Config::global().get_ghosty_mode().unwrap_or_default(),
                 )
                 .await?;
 
@@ -343,7 +343,7 @@ pub async fn handle_term_info() -> Result<()> {
 
     let config = goose::config::Config::global();
     let model_name = config
-        .get_goose_model()
+        .get_ghosty_model()
         .ok()
         .map(|name| {
             let short = name.rsplit('/').next().unwrap_or(&name);
@@ -356,10 +356,10 @@ pub async fn handle_term_info() -> Result<()> {
         .unwrap_or_else(|| "?".to_string());
 
     let context_limit = config
-        .get_goose_model()
+        .get_ghosty_model()
         .ok()
         .and_then(|model_name| {
-            config.get_goose_provider().ok().and_then(|provider_name| {
+            config.get_ghosty_provider().ok().and_then(|provider_name| {
                 goose::model_config::model_config_from_user_config(&provider_name, &model_name).ok()
             })
         })
@@ -392,7 +392,7 @@ mod tests {
         assert!(script.contains("$env.AGENT_SESSION_ID = \"session-123\""));
         assert!(script.contains("def --wrapped @goose [...args]"));
         assert!(script.contains("def --wrapped @g [...args]"));
-        assert!(script.contains("GOOSE_NU_PREEXEC_INSTALLED"));
+        assert!(script.contains("GHOSTY_NU_PREEXEC_INSTALLED"));
         assert!(script.contains("$env.config.hooks.pre_execution"));
         assert!(script.contains("job spawn { run-external \"/tmp/goose\" \"term\" \"log\" $line | complete | ignore } | ignore"));
         assert!(!script.contains("command_not_found = {|command_name|"));

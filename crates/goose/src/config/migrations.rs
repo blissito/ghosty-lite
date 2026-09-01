@@ -10,6 +10,7 @@ const ACTIVE_PROVIDER_KEY: &str = "active_provider";
 
 pub fn run_migrations(config: &mut Mapping) -> bool {
     let mut changed = false;
+    changed |= migrate_goose_keys(config);
     changed |= migrate_platform_extensions(config);
     changed |= migrate_provider_config(config);
     changed
@@ -19,7 +20,35 @@ pub fn run_migrations(config: &mut Mapping) -> bool {
 /// Provider migration is excluded because it removes flat keys that
 /// `get_param()` callers may still look up directly.
 pub fn run_read_migrations(config: &mut Mapping) {
+    migrate_goose_keys(config);
     migrate_platform_extensions(config);
+}
+
+/// Renombra en config.yaml toda clave `GOOSE_*` a `GHOSTY_*` (una instalación
+/// que venga de goose). Si ya existe la clave nueva, la vieja se descarta: la
+/// nueva la escribió ghosty-lite y manda. Devuelve `true` si cambió algo.
+fn migrate_goose_keys(config: &mut Mapping) -> bool {
+    let legacy: Vec<String> = config
+        .keys()
+        .filter_map(|k| k.as_str())
+        .filter(|k| k.starts_with("GOOSE_"))
+        .map(str::to_string)
+        .collect();
+    if legacy.is_empty() {
+        return false;
+    }
+    for old in legacy {
+        let Some(rest) = old.strip_prefix("GOOSE_") else {
+            continue;
+        };
+        let new = format!("GHOSTY_{rest}");
+        if let Some(value) = config.shift_remove(serde_yaml::Value::String(old)) {
+            config
+                .entry(serde_yaml::Value::String(new))
+                .or_insert(value);
+        }
+    }
+    true
 }
 
 fn read_enabled_field(value: &serde_yaml::Value) -> Option<bool> {
@@ -142,7 +171,7 @@ fn cleanup_legacy_provider_keys(config: &mut Mapping) -> bool {
         .filter(|k| {
             k.as_str()
                 .map(|s| {
-                    s == "GOOSE_PROVIDER" || s == "GOOSE_MODEL" || s.ends_with(configured_suffix)
+                    s == "GHOSTY_PROVIDER" || s == "GHOSTY_MODEL" || s.ends_with(configured_suffix)
                 })
                 .unwrap_or(false)
         })
@@ -161,8 +190,8 @@ fn cleanup_legacy_provider_keys(config: &mut Mapping) -> bool {
 ///
 /// Old layout (flat keys):
 /// ```yaml
-/// GOOSE_PROVIDER: claude-acp
-/// GOOSE_MODEL: current
+/// GHOSTY_PROVIDER: claude-acp
+/// GHOSTY_MODEL: current
 /// claude-acp_configured: true
 /// lmstudio_configured: true
 /// ```
@@ -190,7 +219,7 @@ fn migrate_provider_config(config: &mut Mapping) -> bool {
         let ap_key = serde_yaml::Value::String(ACTIVE_PROVIDER_KEY.to_string());
         if !config.contains_key(&ap_key) {
             if let Some(legacy) = config
-                .get(serde_yaml::Value::String("GOOSE_PROVIDER".to_string()))
+                .get(serde_yaml::Value::String("GHOSTY_PROVIDER".to_string()))
                 .and_then(|v| v.as_str())
             {
                 config.insert(ap_key, serde_yaml::Value::String(legacy.to_string()));
@@ -201,12 +230,12 @@ fn migrate_provider_config(config: &mut Mapping) -> bool {
 
     // Read the old flat keys, if present.
     let active_provider = config
-        .get(serde_yaml::Value::String("GOOSE_PROVIDER".to_string()))
+        .get(serde_yaml::Value::String("GHOSTY_PROVIDER".to_string()))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
     let active_model = config
-        .get(serde_yaml::Value::String("GOOSE_MODEL".to_string()))
+        .get(serde_yaml::Value::String("GHOSTY_MODEL".to_string()))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .unwrap_or_default();
@@ -269,8 +298,8 @@ fn migrate_provider_config(config: &mut Mapping) -> bool {
     }
 
     // Remove old flat keys.
-    config.shift_remove(serde_yaml::Value::String("GOOSE_PROVIDER".to_string()));
-    config.shift_remove(serde_yaml::Value::String("GOOSE_MODEL".to_string()));
+    config.shift_remove(serde_yaml::Value::String("GHOSTY_PROVIDER".to_string()));
+    config.shift_remove(serde_yaml::Value::String("GHOSTY_MODEL".to_string()));
     for name in &discovered_providers {
         let marker_key = serde_yaml::Value::String(format!("{}{}", name, configured_suffix));
         config.shift_remove(&marker_key);
@@ -400,11 +429,11 @@ mod tests {
     fn test_migrate_provider_config_basic() {
         let mut config = Mapping::new();
         config.insert(
-            serde_yaml::Value::String("GOOSE_PROVIDER".to_string()),
+            serde_yaml::Value::String("GHOSTY_PROVIDER".to_string()),
             serde_yaml::Value::String("claude-acp".to_string()),
         );
         config.insert(
-            serde_yaml::Value::String("GOOSE_MODEL".to_string()),
+            serde_yaml::Value::String("GHOSTY_MODEL".to_string()),
             serde_yaml::Value::String("current".to_string()),
         );
         config.insert(
@@ -441,8 +470,8 @@ mod tests {
         assert_eq!(entry.model, "current");
 
         // Old flat keys should be removed
-        assert!(!config.contains_key(serde_yaml::Value::String("GOOSE_PROVIDER".to_string())));
-        assert!(!config.contains_key(serde_yaml::Value::String("GOOSE_MODEL".to_string())));
+        assert!(!config.contains_key(serde_yaml::Value::String("GHOSTY_PROVIDER".to_string())));
+        assert!(!config.contains_key(serde_yaml::Value::String("GHOSTY_MODEL".to_string())));
         assert!(!config.contains_key(serde_yaml::Value::String(
             "claude-acp_configured".to_string()
         )));
@@ -452,11 +481,11 @@ mod tests {
     fn test_migrate_provider_config_multiple_configured() {
         let mut config = Mapping::new();
         config.insert(
-            serde_yaml::Value::String("GOOSE_PROVIDER".to_string()),
+            serde_yaml::Value::String("GHOSTY_PROVIDER".to_string()),
             serde_yaml::Value::String("claude-acp".to_string()),
         );
         config.insert(
-            serde_yaml::Value::String("GOOSE_MODEL".to_string()),
+            serde_yaml::Value::String("GHOSTY_MODEL".to_string()),
             serde_yaml::Value::String("current".to_string()),
         );
         config.insert(
@@ -510,11 +539,11 @@ mod tests {
     fn test_migrate_provider_config_idempotent() {
         let mut config = Mapping::new();
         config.insert(
-            serde_yaml::Value::String("GOOSE_PROVIDER".to_string()),
+            serde_yaml::Value::String("GHOSTY_PROVIDER".to_string()),
             serde_yaml::Value::String("openai".to_string()),
         );
         config.insert(
-            serde_yaml::Value::String("GOOSE_MODEL".to_string()),
+            serde_yaml::Value::String("GHOSTY_MODEL".to_string()),
             serde_yaml::Value::String("gpt-4o".to_string()),
         );
 
@@ -537,10 +566,10 @@ mod tests {
     fn test_migrate_provider_config_no_model() {
         let mut config = Mapping::new();
         config.insert(
-            serde_yaml::Value::String("GOOSE_PROVIDER".to_string()),
+            serde_yaml::Value::String("GHOSTY_PROVIDER".to_string()),
             serde_yaml::Value::String("anthropic".to_string()),
         );
-        // No GOOSE_MODEL key
+        // No GHOSTY_MODEL key
 
         let changed = migrate_provider_config(&mut config);
         assert!(changed);
@@ -577,11 +606,11 @@ mod tests {
             serde_yaml::Value::Mapping(providers_map),
         );
         config.insert(
-            serde_yaml::Value::String("GOOSE_PROVIDER".to_string()),
+            serde_yaml::Value::String("GHOSTY_PROVIDER".to_string()),
             serde_yaml::Value::String("lmstudio".to_string()),
         );
         config.insert(
-            serde_yaml::Value::String("GOOSE_MODEL".to_string()),
+            serde_yaml::Value::String("GHOSTY_MODEL".to_string()),
             serde_yaml::Value::String("some-model".to_string()),
         );
         config.insert(
@@ -593,8 +622,8 @@ mod tests {
         assert!(changed);
 
         // Legacy keys should be gone
-        assert!(!config.contains_key(serde_yaml::Value::String("GOOSE_PROVIDER".to_string())));
-        assert!(!config.contains_key(serde_yaml::Value::String("GOOSE_MODEL".to_string())));
+        assert!(!config.contains_key(serde_yaml::Value::String("GHOSTY_PROVIDER".to_string())));
+        assert!(!config.contains_key(serde_yaml::Value::String("GHOSTY_MODEL".to_string())));
         assert!(!config.contains_key(serde_yaml::Value::String(
             "claude-acp_configured".to_string()
         )));
@@ -602,7 +631,7 @@ mod tests {
         // Providers block should be untouched
         assert!(config.contains_key(serde_yaml::Value::String("providers".to_string())));
 
-        // active_provider should be backfilled from legacy GOOSE_PROVIDER
+        // active_provider should be backfilled from legacy GHOSTY_PROVIDER
         assert_eq!(
             config
                 .get(serde_yaml::Value::String("active_provider".to_string()))

@@ -6,7 +6,7 @@ const DEFAULT_LARGE_TEXT_THRESHOLD: usize = 200_000;
 
 pub(crate) fn max_tool_response_size() -> usize {
     Config::global()
-        .get_param::<usize>("GOOSE_MAX_TOOL_RESPONSE_SIZE")
+        .get_param::<usize>("GHOSTY_MAX_TOOL_RESPONSE_SIZE")
         .unwrap_or(DEFAULT_LARGE_TEXT_THRESHOLD)
 }
 

@@ -233,7 +233,7 @@ pub async fn run_config_mcp<C: Connection>() {
     let mcp = McpFixture::new().await;
 
     let config_yaml = format!(
-        "GOOSE_MODEL: {TEST_MODEL}\nGOOSE_PROVIDER: openai\nextensions:\n  mcp-fixture:\n    enabled: true\n    type: streamable_http\n    name: mcp-fixture\n    description: MCP fixture\n    uri: \"{}\"\n",
+        "GHOSTY_MODEL: {TEST_MODEL}\nGHOSTY_PROVIDER: openai\nextensions:\n  mcp-fixture:\n    enabled: true\n    type: streamable_http\n    name: mcp-fixture\n    description: MCP fixture\n    uri: \"{}\"\n",
         mcp.url
     );
     fs::write(temp_dir.path().join(CONFIG_YAML_NAME), config_yaml).unwrap();
@@ -283,7 +283,7 @@ pub async fn run_config_mcp<C: Connection>() {
 pub async fn run_fs_read_text_file_true<C: Connection>() {
     let temp_dir = tempfile::tempdir().unwrap();
     let config_yaml = format!(
-        "GOOSE_MODEL: {TEST_MODEL}\nGOOSE_PROVIDER: openai\nextensions:\n  developer:\n    enabled: true\n    type: platform\n    name: developer\n    description: Developer\n    display_name: Developer\n    bundled: true\n    available_tools: []\n"
+        "GHOSTY_MODEL: {TEST_MODEL}\nGHOSTY_PROVIDER: openai\nextensions:\n  developer:\n    enabled: true\n    type: platform\n    name: developer\n    description: Developer\n    display_name: Developer\n    bundled: true\n    available_tools: []\n"
     );
     fs::write(temp_dir.path().join(CONFIG_YAML_NAME), config_yaml).unwrap();
 
@@ -466,7 +466,7 @@ pub async fn run_load_mode<C: Connection>() {
     let mcp = McpFixture::new().await;
 
     let config_yaml = format!(
-        "GOOSE_MODEL: {TEST_MODEL}\nGOOSE_PROVIDER: openai\nextensions:\n  mcp-fixture:\n    enabled: true\n    type: streamable_http\n    name: mcp-fixture\n    description: MCP fixture\n    uri: \"{}\"\n",
+        "GHOSTY_MODEL: {TEST_MODEL}\nGHOSTY_PROVIDER: openai\nextensions:\n  mcp-fixture:\n    enabled: true\n    type: streamable_http\n    name: mcp-fixture\n    description: MCP fixture\n    uri: \"{}\"\n",
         mcp.url
     );
     fs::write(temp_dir.path().join(CONFIG_YAML_NAME), config_yaml).unwrap();
@@ -565,7 +565,7 @@ pub async fn run_load_session_mcp<C: Connection>() {
     fs::write(
         temp_dir.path().join(CONFIG_YAML_NAME),
         format!(
-            "GOOSE_MODEL: {TEST_MODEL}\nGOOSE_PROVIDER: openai\nextensions:\n  developer:\n    enabled: true\n    type: platform\n    name: developer\n    description: Developer\n    display_name: Developer\n    bundled: true\n    available_tools: []\n"
+            "GHOSTY_MODEL: {TEST_MODEL}\nGHOSTY_PROVIDER: openai\nextensions:\n  developer:\n    enabled: true\n    type: platform\n    name: developer\n    description: Developer\n    display_name: Developer\n    bundled: true\n    available_tools: []\n"
         ),
     )
     .unwrap();
@@ -795,7 +795,7 @@ async fn run_mode_set_impl<C: Connection>(via: SetModeVia) {
     let mcp = McpFixture::new().await;
 
     let config_yaml = format!(
-        "GOOSE_MODEL: {TEST_MODEL}\nGOOSE_PROVIDER: openai\nextensions:\n  mcp-fixture:\n    enabled: true\n    type: streamable_http\n    name: mcp-fixture\n    description: MCP fixture\n    uri: \"{}\"\n",
+        "GHOSTY_MODEL: {TEST_MODEL}\nGHOSTY_PROVIDER: openai\nextensions:\n  mcp-fixture:\n    enabled: true\n    type: streamable_http\n    name: mcp-fixture\n    description: MCP fixture\n    uri: \"{}\"\n",
         mcp.url
     );
     fs::write(temp_dir.path().join(CONFIG_YAML_NAME), config_yaml).unwrap();
@@ -965,7 +965,7 @@ pub async fn run_new_session_uses_current_config_mode<C: Connection>() {
     let config_path = temp_dir.path().join(goose::config::base::CONFIG_YAML_NAME);
     fs::write(
         &config_path,
-        format!("GOOSE_MODEL: {TEST_MODEL}\nGOOSE_PROVIDER: openai\nGOOSE_MODE: approve\n"),
+        format!("GHOSTY_MODEL: {TEST_MODEL}\nGHOSTY_PROVIDER: openai\nGHOSTY_MODE: approve\n"),
     )
     .unwrap();
 
@@ -983,7 +983,7 @@ pub async fn run_new_session_uses_current_config_mode<C: Connection>() {
         goose::config::paths::Paths::config_dir().join(goose::config::base::CONFIG_YAML_NAME);
     fs::write(
         &global_config_path,
-        format!("GOOSE_MODEL: {TEST_MODEL}\nGOOSE_PROVIDER: openai\nGOOSE_MODE: auto\n"),
+        format!("GHOSTY_MODEL: {TEST_MODEL}\nGHOSTY_PROVIDER: openai\nGHOSTY_MODE: auto\n"),
     )
     .unwrap();
 

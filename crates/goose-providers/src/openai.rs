@@ -693,7 +693,7 @@ impl Provider for OpenAiProvider {
     }
 
     /// Resolve the effective context limit. When the config carries an explicit
-    /// limit (GOOSE_CONTEXT_LIMIT, a session override, or a known/canonical
+    /// limit (GHOSTY_CONTEXT_LIMIT, a session override, or a known/canonical
     /// value) it is used as-is. Otherwise probe `/v1/models`: llama.cpp and
     /// Ollama report the real allocated window via the non-standard
     /// `meta.n_ctx` field, which fixes auto-compaction for local servers that

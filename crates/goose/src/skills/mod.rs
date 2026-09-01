@@ -108,23 +108,23 @@ pub(crate) fn validate_skill_name(name: &str) -> Result<(), Error> {
 }
 
 const DEFAULT_GOOSE_DOCS_ROOT: &str = "https://goose-docs.ai";
-const GOOSE_DOCS_ROOT_PLACEHOLDER: &str = "{{GOOSE_DOCS_ROOT}}";
+const GHOSTY_DOCS_ROOT_PLACEHOLDER: &str = "{{GHOSTY_DOCS_ROOT}}";
 
-/// Substitute the `{{GOOSE_DOCS_ROOT}}` placeholder in the builtin
+/// Substitute the `{{GHOSTY_DOCS_ROOT}}` placeholder in the builtin
 /// `goose-doc-guide` skill with the resolved docs root. Resolution is
-/// deterministic: the configured `GOOSE_DOCS_ROOT` if set, otherwise the
+/// deterministic: the configured `GHOSTY_DOCS_ROOT` if set, otherwise the
 /// canonical online docs root.
 fn resolve_docs_root_placeholder(skill: &SourceEntry, content: &str, docs_root: &str) -> String {
     if skill.name != "goose-doc-guide" || skill.source_type != SourceType::BuiltinSkill {
         return content.to_string();
     }
 
-    content.replace(GOOSE_DOCS_ROOT_PLACEHOLDER, docs_root)
+    content.replace(GHOSTY_DOCS_ROOT_PLACEHOLDER, docs_root)
 }
 
 fn loaded_skill_context(skill: &SourceEntry, content: &str) -> Result<String> {
     let docs_root = Config::global()
-        .get_goose_docs_root()?
+        .get_ghosty_docs_root()?
         .unwrap_or_else(|| DEFAULT_GOOSE_DOCS_ROOT.to_string());
     let content = resolve_docs_root_placeholder(skill, content, &docs_root);
 
@@ -720,7 +720,7 @@ mod tests {
             source_type: SourceType::BuiltinSkill,
             name: "goose-doc-guide".to_string(),
             description: "Test docs skill".to_string(),
-            content: "Docs root: {{GOOSE_DOCS_ROOT}}.".to_string(),
+            content: "Docs root: {{GHOSTY_DOCS_ROOT}}.".to_string(),
             path: "builtin://skills/goose-doc-guide".to_string(),
             global: true,
             writable: true,
@@ -812,7 +812,7 @@ mod tests {
             )
             .unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -848,7 +848,7 @@ mod tests {
             )
             .unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -893,7 +893,7 @@ mod tests {
             )
             .unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -916,7 +916,7 @@ mod tests {
         )
         .unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -954,7 +954,7 @@ mod tests {
             )
             .unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -990,7 +990,7 @@ mod tests {
         .unwrap();
         let config = Config::new(path_root.path().join("test-config.yaml"), "skills-test").unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -1030,7 +1030,7 @@ mod tests {
             )
             .unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -1069,7 +1069,7 @@ mod tests {
             )
             .unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -1117,7 +1117,7 @@ mod tests {
             .unwrap();
         {
             let _guard = env_lock::lock_env([
-                ("GOOSE_PATH_ROOT", project_path_root.path().to_str()),
+                ("GHOSTY_PATH_ROOT", project_path_root.path().to_str()),
                 ("PLUGINS", None),
             ]);
             let project_skill = discover_skills_with_config(Some(project.path()), &project_config)
@@ -1142,7 +1142,7 @@ mod tests {
             )
             .unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 
@@ -1189,7 +1189,7 @@ mod tests {
         .unwrap();
         let config = Config::new(path_root.path().join("test-config.yaml"), "skills-test").unwrap();
         let _guard = env_lock::lock_env([
-            ("GOOSE_PATH_ROOT", path_root.path().to_str()),
+            ("GHOSTY_PATH_ROOT", path_root.path().to_str()),
             ("PLUGINS", None),
         ]);
 

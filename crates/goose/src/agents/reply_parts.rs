@@ -372,7 +372,7 @@ pub(crate) async fn stream_response_from_provider(
     // Capture errors during stream creation and return them as part of the stream
     // so they can be handled by the existing error handling logic in the agent
     let model_config =
-        model_config.with_default_thinking_effort(Config::global().get_goose_thinking_effort());
+        model_config.with_default_thinking_effort(Config::global().get_ghosty_thinking_effort());
     let request_started = std::time::Instant::now();
     debug!("WAITING_LLM_STREAM_START");
     let stream_result = crate::session_context::with_session_id(
@@ -431,7 +431,7 @@ pub(crate) async fn stream_response_from_provider(
                             attempts, retry_config.max_retries, error
                         );
 
-                        let skip_backoff = std::env::var("GOOSE_PROVIDER_SKIP_BACKOFF")
+                        let skip_backoff = std::env::var("GHOSTY_PROVIDER_SKIP_BACKOFF")
                             .unwrap_or_default()
                             .parse::<bool>()
                             .unwrap_or(false);

@@ -1102,7 +1102,7 @@ mod tests {
     fn inventory_configured_uses_oauth_token_cache() {
         let root = tempfile::tempdir().unwrap();
         let root_path = root.path().to_string_lossy().to_string();
-        let _guard = env_lock::lock_env([("GOOSE_PATH_ROOT", Some(root_path.as_str()))]);
+        let _guard = env_lock::lock_env([("GHOSTY_PATH_ROOT", Some(root_path.as_str()))]);
 
         TokenCache::new().clear();
         assert!(!TokenCache::new().has_token());

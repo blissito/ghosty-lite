@@ -1,4 +1,4 @@
-use crate::recipes::github_recipe::GOOSE_RECIPE_GITHUB_REPO_CONFIG_KEY;
+use crate::recipes::github_recipe::GHOSTY_RECIPE_GITHUB_REPO_CONFIG_KEY;
 use cliclack::spinner;
 use console::style;
 use goose::agents::extension::{ToolInfo, PLATFORM_EXTENSIONS};
@@ -607,7 +607,7 @@ fn try_store_secret(config: &Config, key_name: &str, value: String) -> anyhow::R
         Err(ConfigError::FallbackToFileStorage) => Ok(true),
         Err(e) => {
             cliclack::outro(style(format!(
-                "Failed to store {} securely: {}. Please ensure your system's secure storage is accessible. Alternatively you can run with GOOSE_DISABLE_KEYRING=true or set the key in your environment variables",
+                "Failed to store {} securely: {}. Please ensure your system's secure storage is accessible. Alternatively you can run with GHOSTY_DISABLE_KEYRING=true or set the key in your environment variables",
                 key_name, e
             )).on_red().white())?;
             Ok(false)
@@ -742,7 +742,7 @@ pub async fn configure_provider_dialog() -> anyhow::Result<bool> {
     // Get global config instance
     let config = Config::global();
 
-    let current_provider: Option<String> = config.get_goose_provider().ok();
+    let current_provider: Option<String> = config.get_ghosty_provider().ok();
     let mut available_providers = providers().await;
     available_providers.retain(|(provider, _)| {
         provider.deprecated.is_none() || current_provider.as_deref() == Some(&provider.name)
@@ -883,7 +883,7 @@ pub async fn configure_provider_dialog() -> anyhow::Result<bool> {
         Ok(models) if !models.is_empty() => select_model_from_list(&models, provider_meta)?,
         Ok(_) => {
             let default_model =
-                std::env::var("GOOSE_MODEL").unwrap_or(provider_meta.default_model.clone());
+                std::env::var("GHOSTY_MODEL").unwrap_or(provider_meta.default_model.clone());
             cliclack::input("Enter a model from that provider:")
                 .default_input(&default_model)
                 .interact()?
@@ -907,7 +907,7 @@ pub async fn configure_provider_dialog() -> anyhow::Result<bool> {
                 .interact()?
                 .parse()
                 .map_err(|_| anyhow::anyhow!("invalid thinking effort"))?;
-            config.set_goose_thinking_effort(effort)?;
+            config.set_ghosty_thinking_effort(effort)?;
         }
     }
 
@@ -915,10 +915,10 @@ pub async fn configure_provider_dialog() -> anyhow::Result<bool> {
     let spin = spinner();
     spin.start("Checking your configuration...");
 
-    let toolshim_enabled = std::env::var("GOOSE_TOOLSHIM")
+    let toolshim_enabled = std::env::var("GHOSTY_TOOLSHIM")
         .map(|val| val == "1" || val.to_lowercase() == "true")
         .unwrap_or(false);
-    let toolshim_model = std::env::var("GOOSE_TOOLSHIM_OLLAMA_MODEL").ok();
+    let toolshim_model = std::env::var("GHOSTY_TOOLSHIM_OLLAMA_MODEL").ok();
 
     match test_provider_configuration(&provider_name, &model, toolshim_enabled, toolshim_model)
         .await
@@ -1431,9 +1431,9 @@ pub async fn configure_settings_dialog() -> anyhow::Result<()> {
 pub fn configure_goose_mode_dialog() -> anyhow::Result<()> {
     let config = Config::global();
 
-    if std::env::var("GOOSE_MODE").is_ok() {
+    if std::env::var("GHOSTY_MODE").is_ok() {
         let _ = cliclack::log::info(
-            "Notice: GOOSE_MODE environment variable is set and will override the configuration here.",
+            "Notice: GHOSTY_MODE environment variable is set and will override the configuration here.",
         );
     }
 
@@ -1460,7 +1460,7 @@ pub fn configure_goose_mode_dialog() -> anyhow::Result<()> {
         )
         .interact()?;
 
-    config.set_goose_mode(mode)?;
+    config.set_ghosty_mode(mode)?;
     let msg = match mode {
         GooseMode::Auto => "Set to Auto Mode - full file modification enabled",
         GooseMode::Approve => "Set to Approve Mode - all tools and modifications require approval",
@@ -1474,9 +1474,9 @@ pub fn configure_goose_mode_dialog() -> anyhow::Result<()> {
 pub fn configure_tool_output_dialog() -> anyhow::Result<()> {
     let config = Config::global();
 
-    if std::env::var("GOOSE_CLI_MIN_PRIORITY").is_ok() {
+    if std::env::var("GHOSTY_CLI_MIN_PRIORITY").is_ok() {
         let _ = cliclack::log::info(
-            "Notice: GOOSE_CLI_MIN_PRIORITY environment variable is set and will override the configuration here.",
+            "Notice: GHOSTY_CLI_MIN_PRIORITY environment variable is set and will override the configuration here.",
         );
     }
     let tool_log_level = cliclack::select("Which tool output would you like to show?")
@@ -1487,15 +1487,15 @@ pub fn configure_tool_output_dialog() -> anyhow::Result<()> {
 
     match tool_log_level {
         "high" => {
-            config.set_param("GOOSE_CLI_MIN_PRIORITY", 0.8)?;
+            config.set_param("GHOSTY_CLI_MIN_PRIORITY", 0.8)?;
             cliclack::outro("Showing tool output of high importance only.")?;
         }
         "medium" => {
-            config.set_param("GOOSE_CLI_MIN_PRIORITY", 0.2)?;
+            config.set_param("GHOSTY_CLI_MIN_PRIORITY", 0.2)?;
             cliclack::outro("Showing tool output of medium importance.")?;
         }
         "all" => {
-            config.set_param("GOOSE_CLI_MIN_PRIORITY", 0.0)?;
+            config.set_param("GHOSTY_CLI_MIN_PRIORITY", 0.0)?;
             cliclack::outro("Showing all tool output.")?;
         }
         _ => unreachable!(),
@@ -1507,13 +1507,13 @@ pub fn configure_tool_output_dialog() -> anyhow::Result<()> {
 pub fn configure_keyring_dialog() -> anyhow::Result<()> {
     let config = Config::global();
 
-    if std::env::var("GOOSE_DISABLE_KEYRING").is_ok() {
+    if std::env::var("GHOSTY_DISABLE_KEYRING").is_ok() {
         let _ = cliclack::log::info(
-            "Notice: GOOSE_DISABLE_KEYRING environment variable is set and will override the configuration here.",
+            "Notice: GHOSTY_DISABLE_KEYRING environment variable is set and will override the configuration here.",
         );
     }
 
-    let currently_disabled = config.get_param::<String>("GOOSE_DISABLE_KEYRING").is_ok();
+    let currently_disabled = config.get_param::<String>("GHOSTY_DISABLE_KEYRING").is_ok();
 
     let current_status = if currently_disabled {
         "Disabled (using file-based storage)"
@@ -1544,14 +1544,14 @@ pub fn configure_keyring_dialog() -> anyhow::Result<()> {
     match storage_option {
         "keyring" => {
             // Set to empty string to enable keyring (absence or empty = enabled)
-            config.set_param("GOOSE_DISABLE_KEYRING", Value::String("".to_string()))?;
+            config.set_param("GHOSTY_DISABLE_KEYRING", Value::String("".to_string()))?;
             cliclack::outro("Secret storage set to system keyring (secure)")?;
             let _ =
                 cliclack::log::info("You may need to restart goose for this change to take effect");
         }
         "file" => {
             // Set the disable flag to use file storage
-            config.set_param("GOOSE_DISABLE_KEYRING", Value::String("true".to_string()))?;
+            config.set_param("GHOSTY_DISABLE_KEYRING", Value::String("true".to_string()))?;
             cliclack::outro(format!(
                 "Secret storage set to file ({}). Keep this file secure!",
                 secrets_path.display(),
@@ -1627,11 +1627,11 @@ pub async fn configure_tool_permissions_dialog() -> anyhow::Result<()> {
     let config = Config::global();
 
     let provider_name: String = config
-        .get_goose_provider()
+        .get_ghosty_provider()
         .expect("No provider configured. Please set model provider first");
 
     let model: String = config
-        .get_goose_model()
+        .get_ghosty_model()
         .expect("No model configured. Please set model first");
     let model_config = goose::model_config::model_config_from_user_config(&provider_name, &model)?;
 
@@ -1778,7 +1778,7 @@ pub async fn configure_tool_permissions_dialog() -> anyhow::Result<()> {
 }
 
 fn configure_recipe_dialog() -> anyhow::Result<()> {
-    let key_name = GOOSE_RECIPE_GITHUB_REPO_CONFIG_KEY;
+    let key_name = GHOSTY_RECIPE_GITHUB_REPO_CONFIG_KEY;
     let config = Config::global();
     let default_recipe_repo = std::env::var(key_name)
         .ok()
@@ -1802,7 +1802,7 @@ fn configure_recipe_dialog() -> anyhow::Result<()> {
 pub fn configure_max_turns_dialog() -> anyhow::Result<()> {
     let config = Config::global();
 
-    let current_max_turns: u32 = config.get_param("GOOSE_MAX_TURNS").unwrap_or(1000);
+    let current_max_turns: u32 = config.get_param("GHOSTY_MAX_TURNS").unwrap_or(1000);
 
     let max_turns_input: String =
         cliclack::input("Set maximum number of agent turns without user input:")
@@ -1821,7 +1821,7 @@ pub fn configure_max_turns_dialog() -> anyhow::Result<()> {
             .interact()?;
 
     let max_turns: u32 = max_turns_input.parse()?;
-    config.set_param("GOOSE_MAX_TURNS", max_turns)?;
+    config.set_param("GHOSTY_MAX_TURNS", max_turns)?;
 
     cliclack::outro(format!(
         "Set maximum turns to {} - goose will ask for input after {} consecutive actions",
@@ -1854,7 +1854,7 @@ pub async fn handle_openrouter_auth() -> anyhow::Result<()> {
 
     // Test configuration - get the model that was configured
     println!("\nTesting configuration...");
-    let configured_model: String = config.get_goose_model()?;
+    let configured_model: String = config.get_ghosty_model()?;
     let model_config =
         match goose::model_config::model_config_from_user_config("openrouter", &configured_model) {
             Ok(config) => config,
@@ -1934,7 +1934,7 @@ pub async fn handle_tetrate_auth() -> anyhow::Result<()> {
 
     // Test configuration
     println!("\nTesting configuration...");
-    let configured_model: String = config.get_goose_model()?;
+    let configured_model: String = config.get_ghosty_model()?;
     if let Err(e) = goose::model_config::model_config_from_user_config("tetrate", &configured_model)
     {
         eprintln!("⚠️  Invalid model configuration: {}", e);
@@ -2144,8 +2144,8 @@ fn add_provider() -> anyhow::Result<()> {
             .items(&model_items)
             .interact()
         {
-            config.set_goose_provider(&provider_config.name)?;
-            config.set_goose_model(model)?;
+            config.set_ghosty_provider(&provider_config.name)?;
+            config.set_ghosty_model(model)?;
         }
     }
 

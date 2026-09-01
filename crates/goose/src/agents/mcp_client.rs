@@ -52,8 +52,8 @@ const MCP_APPS_UI_MIME_TYPE: &str = "text/html;profile=mcp-app";
 
 fn resolve_sampling_model_config() -> anyhow::Result<goose_providers::model::ModelConfig> {
     let config = crate::config::Config::global();
-    let provider_name = config.get_goose_provider()?;
-    let model_name = config.get_goose_model()?;
+    let provider_name = config.get_ghosty_provider()?;
+    let model_name = config.get_ghosty_model()?;
     crate::model_config::model_config_from_user_config(&provider_name, &model_name)
 }
 
@@ -339,7 +339,7 @@ impl GooseClient {
             .as_ref()
             .and_then(|host_info| host_info.client_version.clone())
             .unwrap_or_else(|| {
-                std::env::var("GOOSE_MCP_CLIENT_VERSION")
+                std::env::var("GHOSTY_MCP_CLIENT_VERSION")
                     .unwrap_or(env!("CARGO_PKG_VERSION").to_owned())
             });
 

@@ -67,16 +67,16 @@ impl AgentManager {
             .get_or_try_init(|| async {
                 let config = Config::global();
                 let max_sessions = config
-                    .get_goose_max_active_agents()
+                    .get_ghosty_max_active_agents()
                     .unwrap_or(DEFAULT_MAX_SESSION);
-                let default_mode = config.get_goose_mode().unwrap_or_default();
+                let default_mode = config.get_ghosty_mode().unwrap_or_default();
                 let session_manager = Arc::new(SessionManager::instance());
                 let agent_config = AgentConfig::new(
                     session_manager,
                     PermissionManager::instance(),
                     None,
                     default_mode,
-                    config.get_goose_disable_session_naming().unwrap_or(false),
+                    config.get_ghosty_disable_session_naming().unwrap_or(false),
                     GoosePlatform::GooseDesktop,
                 );
                 let manager = Self::new(agent_config, Some(max_sessions)).await?;
@@ -237,9 +237,9 @@ impl AgentManager {
             if let Some(provider) = &*self.default_provider.read().await {
                 let config = crate::config::Config::global();
                 let model_config = config
-                    .get_goose_provider()
+                    .get_ghosty_provider()
                     .ok()
-                    .zip(config.get_goose_model().ok())
+                    .zip(config.get_ghosty_model().ok())
                     .and_then(|(provider_name, model_name)| {
                         crate::model_config::model_config_from_user_config(
                             &provider_name,

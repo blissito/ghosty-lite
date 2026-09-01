@@ -83,7 +83,7 @@ impl AcpServer {
         session_cwd: Option<std::path::PathBuf>,
     ) -> Result<Arc<GooseAcpAgent>> {
         let config = crate::config::Config::global();
-        let disable_session_naming = config.get_goose_disable_session_naming().unwrap_or(false);
+        let disable_session_naming = config.get_ghosty_disable_session_naming().unwrap_or(false);
         let scheduler = self.scheduler().await?;
         if let Some(scheduler) = &scheduler {
             // Listing syncs from storage, registering jobs persisted by other processes.

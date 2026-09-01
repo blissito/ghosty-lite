@@ -611,7 +611,7 @@ impl SessionManager {
             None => {
                 let model_name =
                     crate::config::Config::global()
-                        .get_goose_model()
+                        .get_ghosty_model()
                         .map_err(|_| {
                             anyhow::anyhow!("Could not resolve model config: missing model")
                         })?;

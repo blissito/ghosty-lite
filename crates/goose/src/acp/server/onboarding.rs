@@ -5,7 +5,7 @@ use serde_yaml::Mapping;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-const GOOSE_CONFIG_PREFIX: &str = "goose_config:";
+const GHOSTY_CONFIG_PREFIX: &str = "goose_config:";
 const CLAUDE_DESKTOP_PREFIX: &str = "claude_desktop:";
 
 #[derive(Debug, Deserialize)]
@@ -216,8 +216,8 @@ fn scan_goose_config_candidate(path: &Path) -> Option<OnboardingImportCandidate>
     let mut counts = OnboardingImportCounts::default();
     let mut warnings = Vec::new();
 
-    if mapping_contains_string(&mapping, "GOOSE_PROVIDER")
-        || mapping_contains_string(&mapping, "GOOSE_MODEL")
+    if mapping_contains_string(&mapping, "GHOSTY_PROVIDER")
+        || mapping_contains_string(&mapping, "GHOSTY_MODEL")
     {
         counts.providers = 1;
     }
@@ -232,7 +232,7 @@ fn scan_goose_config_candidate(path: &Path) -> Option<OnboardingImportCandidate>
     }
 
     Some(OnboardingImportCandidate {
-        id: candidate_id(GOOSE_CONFIG_PREFIX, path),
+        id: candidate_id(GHOSTY_CONFIG_PREFIX, path),
         source_kind: OnboardingImportSourceKind::GooseConfig,
         display_name: "Existing Goose configuration".to_string(),
         path: path.to_string_lossy().to_string(),
@@ -269,7 +269,7 @@ fn candidate_id(prefix: &str, path: &Path) -> String {
 }
 
 fn parse_candidate_id(id: &str) -> Option<(OnboardingImportSourceKind, PathBuf)> {
-    if let Some(path) = id.strip_prefix(GOOSE_CONFIG_PREFIX) {
+    if let Some(path) = id.strip_prefix(GHOSTY_CONFIG_PREFIX) {
         return Some((OnboardingImportSourceKind::GooseConfig, PathBuf::from(path)));
     }
     if let Some(path) = id.strip_prefix(CLAUDE_DESKTOP_PREFIX) {
@@ -322,8 +322,8 @@ fn apply_goose_config_candidate(
     let source = read_yaml_mapping(source_path)?;
     let mut result = ApplyResult::default();
 
-    let provider = yaml_string(&source, "GOOSE_PROVIDER");
-    let model = yaml_string(&source, "GOOSE_MODEL");
+    let provider = yaml_string(&source, "GHOSTY_PROVIDER");
+    let model = yaml_string(&source, "GHOSTY_MODEL");
     if let Some(ref p) = provider {
         let m = model.clone().unwrap_or_else(|| {
             crate::config::get_provider_entry(target_config, p)
@@ -611,7 +611,7 @@ mod tests {
         .unwrap();
         let req = OnboardingImportApplyRequest {
             candidate_ids: vec![
-                candidate_id(GOOSE_CONFIG_PREFIX, &missing_goose_config),
+                candidate_id(GHOSTY_CONFIG_PREFIX, &missing_goose_config),
                 candidate_id(CLAUDE_DESKTOP_PREFIX, &claude_config),
             ],
             enable_imported_extensions: false,
@@ -636,8 +636,8 @@ mod tests {
         fs::write(
             &source_config,
             r#"
-GOOSE_PROVIDER: openai
-GOOSE_MODEL: gpt-5.1
+GHOSTY_PROVIDER: openai
+GHOSTY_MODEL: gpt-5.1
 extensions:
   github:
     enabled: true
@@ -665,7 +665,7 @@ extensions:
         assert_eq!(result.imported.providers, 1);
         assert_eq!(result.imported.extensions, 1);
         assert_eq!(result.imported.skills, 1);
-        assert_eq!(target_config.get_goose_provider().unwrap(), "openai");
+        assert_eq!(target_config.get_ghosty_provider().unwrap(), "openai");
         assert!(target.path().join("skills").join("reviewer").exists());
     }
 
@@ -674,7 +674,7 @@ extensions:
         let source = TempDir::new().unwrap();
         let target = TempDir::new().unwrap();
         let source_config = source.path().join(CONFIG_YAML_NAME);
-        fs::write(&source_config, "GOOSE_MODEL: gpt-5.1\n").unwrap();
+        fs::write(&source_config, "GHOSTY_MODEL: gpt-5.1\n").unwrap();
 
         let target_config = Config::new_with_file_secrets(
             target.path().join(CONFIG_YAML_NAME),
@@ -686,7 +686,7 @@ extensions:
             apply_goose_config_candidate(&target_config, target.path(), &source_config).unwrap();
 
         assert_eq!(result.imported.providers, 0);
-        assert!(target_config.get_goose_provider().is_err());
+        assert!(target_config.get_ghosty_provider().is_err());
     }
 
     #[cfg(unix)]

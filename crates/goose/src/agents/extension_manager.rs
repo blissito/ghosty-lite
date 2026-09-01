@@ -116,7 +116,7 @@ static RE_ENV_SIMPLE: Lazy<regex::Regex> =
 fn resolve_timeout(timeout: Option<u64>) -> u64 {
     timeout.unwrap_or_else(|| {
         Config::global()
-            .get_goose_default_extension_timeout()
+            .get_ghosty_default_extension_timeout()
             .unwrap_or(crate::config::DEFAULT_EXTENSION_TIMEOUT)
     })
 }
@@ -758,7 +758,7 @@ pub(crate) fn substitute_env_vars(value: &str, env_map: &HashMap<String, String>
     result
 }
 
-const GOOSE_USER_AGENT: reqwest::header::HeaderValue =
+const GHOSTY_USER_AGENT: reqwest::header::HeaderValue =
     reqwest::header::HeaderValue::from_static(concat!("goose/", env!("CARGO_PKG_VERSION")));
 
 #[allow(clippy::too_many_arguments)]
@@ -775,7 +775,7 @@ async fn connect_with_auth(
     extension_manager: Weak<ExtensionManager>,
 ) -> ExtensionResult<McpClient> {
     let mut auth_headers = HeaderMap::new();
-    auth_headers.insert(reqwest::header::USER_AGENT, GOOSE_USER_AGENT);
+    auth_headers.insert(reqwest::header::USER_AGENT, GHOSTY_USER_AGENT);
     for (key, value) in headers {
         auth_headers.insert(
             HeaderName::try_from(key)
@@ -1144,7 +1144,7 @@ async fn create_streamable_http_client(
 
     let mut default_headers = HeaderMap::new();
 
-    default_headers.insert(reqwest::header::USER_AGENT, GOOSE_USER_AGENT);
+    default_headers.insert(reqwest::header::USER_AGENT, GHOSTY_USER_AGENT);
 
     for (key, value) in headers {
         default_headers.insert(
@@ -1322,7 +1322,7 @@ async fn create_unix_socket_http_client(
 
     custom_headers.insert(
         HeaderName::from_static("user-agent"),
-        GOOSE_USER_AGENT
+        GHOSTY_USER_AGENT
             .to_str()
             .unwrap_or("goose")
             .parse()
@@ -1465,7 +1465,7 @@ impl ExtensionManager {
 
         let effective_working_dir = working_dir
             .clone()
-            .or_else(|| std::env::var("GOOSE_WORKING_DIR").ok().map(PathBuf::from))
+            .or_else(|| std::env::var("GHOSTY_WORKING_DIR").ok().map(PathBuf::from))
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
         let client: Box<dyn McpClientTrait> = match &config {

@@ -2,7 +2,6 @@
 use crate::subprocess::merged_path;
 #[cfg(target_os = "macos")]
 use base64::Engine;
-use etcetera::{choose_app_strategy, AppStrategy};
 use indoc::{formatdoc, indoc};
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -236,9 +235,9 @@ impl ComputerControllerServer {
         // - macOS/Linux: ~/.cache/goose/computer_controller/
         // - Windows:     ~\AppData\Local\Block\goose\cache\computer_controller\
         // keep previous behavior of defaulting to /tmp/
-        let cache_dir = choose_app_strategy(crate::APP_STRATEGY.clone())
-            .map(|strategy| strategy.in_cache_dir("computer_controller"))
-            .unwrap_or_else(|_| std::env::temp_dir());
+        let cache_dir = crate::ghosty_home()
+            .join("cache")
+            .join("computer_controller");
 
         fs::create_dir_all(&cache_dir).unwrap_or_else(|_| {
             println!(
