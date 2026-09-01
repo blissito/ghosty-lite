@@ -6,10 +6,10 @@ resolver = "2"
 edition = "2021"
 version = "1.48.0"
 rust-version = "1.94.1"
-authors = ["AAIF <ai-oss-tools@block.xyz>"]
+authors = ["ghosty.studio <fixtergeek@gmail.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/aaif-goose/goose"
-description = "An AI agent"
+repository = "https://github.com/blissito/ghosty-lite"
+description = "Agente de terminal ligero para cajas efímeras, con servidor ACP por WebSocket"
 
 [workspace.lints.clippy]
 uninlined_format_args = "allow"
@@ -106,3 +106,16 @@ agent-client-protocol-http = { git = "https://github.com/agentclientprotocol/rus
 # full debug info and stay fully debuggable; release builds are unaffected.
 [profile.dev.package."*"]
 debug = false
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+# opt-level 3, no "z": el agente tokeniza, parsea con tree-sitter y consulta
+# sqlite; "z" cuesta 10-30% de CPU y ralentiza los lazy-static del arranque.
+opt-level = 3
+panic = "abort"
+strip = "symbols"
+
+[profile.release-small]
+inherits = "release"
+opt-level = "z"

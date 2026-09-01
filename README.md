@@ -1,63 +1,78 @@
 <div align="center">
 
-# goose
+# 👻 ghosty-lite
 
-_your native open source AI agent — desktop app, CLI, and API — for code, workflows, and everything in between_
-
-<p align="center">
-  <a href="https://opensource.org/licenses/Apache-2.0"
-    ><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"></a>
-  <a href="https://discord.gg/n8R5VaWDAn"
-    ><img src="https://img.shields.io/discord/1287729918100246654?logo=discord&logoColor=white&label=Join+Us&color=blueviolet" alt="Discord"></a>
-  <a href="https://github.com/aaif-goose/goose/actions/workflows/ci.yml"
-     ><img src="https://img.shields.io/github/actions/workflow/status/aaif-goose/goose/ci.yml?branch=main" alt="CI"></a>
-  <a href="https://insights.linuxfoundation.org/project/goose"><img src="https://insights.linuxfoundation.org/api/badge/health-score?project=goose"></a>
-  <a href="https://repology.org/project/goose-cli/versions"><img src="https://repology.org/badge/tiny-repos/goose-cli.svg" alt="Packaging status"></a>
-</p>
-
-<a href="https://trendshift.io/repositories/25298?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-25298" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/25298" alt="aaif-goose%2Fgoose | Trendshift" width="250" height="55"/></a>
+**Un agente de terminal ligero, hecho para correr en cajas efímeras y exponerse por WebSocket.**
 
 </div>
 
+ghosty-lite es un fork de [goose](https://github.com/block/goose) (Apache 2.0) podado y
+rebrandeado por [ghosty.studio](https://ghosty.studio). Se queda con lo que importa dentro de
+una VM chica —el loop del agente, las herramientas, MCP, permisos, recetas, el servidor ACP— y
+deja fuera el desktop, la inferencia local y todo lo que engorda el binario sin servir headless.
 
-goose is a general-purpose AI agent that runs on your machine. Not just for code — use it for research, writing, automation, data analysis, or anything you need to get done.
-
-A native desktop app for macOS, Linux, and Windows. A full CLI for terminal workflows. An API to embed it anywhere. Built in Rust for performance and portability.
-
-goose works with 15+ providers — Anthropic, OpenAI, Google, Ollama, OpenRouter, Azure, Bedrock, and more. Use API keys or your existing Claude, ChatGPT, or Gemini subscriptions via [ACP](https://goose-docs.ai/docs/guides/acp-providers). Connect to 70+ extensions via the [Model Context Protocol](https://modelcontextprotocol.io/) open standard.
-
-goose is part of the [Agentic AI Foundation (AAIF)](https://aaif.io/) at the Linux Foundation.
-
-# Get started
-
-**[Download the desktop app](https://goose-docs.ai/docs/getting-started/installation)** for macOS, Linux, and Windows.
-
-Or install the CLI:
+## Instalar
 
 ```bash
-curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash
+cargo install --git https://github.com/blissito/ghosty-lite ghosty-lite --bin ghosty
 ```
 
-# Quick links
-- [Quickstart](https://goose-docs.ai/docs/quickstart)
-- [Installation](https://goose-docs.ai/docs/getting-started/installation)
-- [Tutorials](https://goose-docs.ai/docs/category/tutorials)
-- [Documentation](https://goose-docs.ai/docs/category/getting-started)
-- [Governance](https://github.com/aaif-goose/goose/blob/main/GOVERNANCE.md)
-- [Custom Distributions](https://github.com/aaif-goose/goose/blob/main/CUSTOM_DISTROS.md) — build your own goose distro with preconfigured providers, extensions, and branding
+## Primer uso
 
-## Need help?
-- [Diagnostics & Reporting](https://goose-docs.ai/docs/troubleshooting/diagnostics-and-reporting)
-- [Known Issues](https://goose-docs.ai/docs/troubleshooting/known-issues)
+```bash
+ghosty            # el primer arranque abre el asistente de configuración
+ghosty configure  # volver a abrirlo cuando quieras
+ghosty doctor     # comprobar proveedor, extensiones y rutas
+```
 
-# a little goose humor 🪿
+## Como servidor (la razón de este proyecto)
 
-> Why did the developer choose goose as their AI agent?
-> 
-> Because it always helps them "migrate" their code to production! 🚀
+```bash
+ghosty serve --setup   # genera el token, elige host/puerto/orígenes e imprime cómo conectar
+ghosty serve           # ACP por WebSocket y HTTP en /acp, salud en /health
+```
 
-# goose around with us
-- [Discord](https://discord.gg/n8R5VaWDAn)
-- [YouTube](https://www.youtube.com/@goose-oss)
-- [LinkedIn](https://www.linkedin.com/company/goose-oss)
-- [Twitter/X](https://x.com/goose_oss)
+Desde un navegador:
+
+```js
+new WebSocket("ws://127.0.0.1:3284/acp?token=ghl-…")
+```
+
+Desde cualquier otro cliente, el token va en la cabecera `X-Secret-Key`. Habla
+[ACP](https://agentclientprotocol.com) estándar: `initialize` → `session/new` →
+`session/prompt`, y recibe `session/update`. Conserva el namespace de extensiones
+`_goose/unstable/*` para que los clientes ACP que ya existen sigan funcionando.
+
+Tres cosas que conviene saber antes de exponerlo:
+
+- Sin `GHOSTY_SERVER_TOKEN` el servidor no arranca (salvo `--dangerously-unauthenticated`).
+- `--allowed-origin` **reemplaza** los orígenes por defecto (loopback); una página servida desde
+  otro origen necesita el suyo en esa lista o recibe 403 en el upgrade.
+- `/health` y `/status` responden sin token. TLS conviene terminarlo en el balanceador.
+
+## En una VM o contenedor
+
+```bash
+docker build -t ghosty-lite .
+docker run -p 3284:3284 -e GHOSTY_SERVER_TOKEN=… -e EASYBITS_API_KEY=… -v datos:/data ghosty-lite
+```
+
+La imagen corre `ghosty serve --host 0.0.0.0`, guarda config y sesiones en `/data`
+(`GHOSTY_PATH_ROOT`) y no usa el keyring del sistema. Todo el estado que importa está en ese
+volumen; sin él, la caja nace limpia cada vez.
+
+## Configuración
+
+Vive en `~/.ghosty-lite/` (o donde apunte `GHOSTY_PATH_ROOT`). Cualquier clave se puede fijar
+por entorno con el mismo nombre: `GHOSTY_PROVIDER`, `GHOSTY_MODEL`, `GHOSTY_MODE`… Las
+variables `GOOSE_*` de una instalación de goose se siguen leyendo.
+
+## Telemetría
+
+Cuenta versión, sistema, duración de la sesión y contadores de uso y errores. Nunca
+conversaciones, código, prompts ni credenciales. Se apaga con `GHOSTY_TELEMETRY=0` o desde
+`ghosty configure` → Ajustes → Telemetría.
+
+## Licencia
+
+Apache 2.0. Ver `LICENSE`, `NOTICE` y `CHANGES-FROM-UPSTREAM.md`.

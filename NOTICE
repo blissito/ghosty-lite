@@ -1,0 +1,19 @@
+ghosty-lite
+Copyright 2026 ghosty.studio (Héctor Bliss)
+
+This product is a modified version of goose (https://github.com/block/goose),
+Copyright 2024-2026 Block, Inc. and the Agentic AI Foundation contributors,
+licensed under the Apache License, Version 2.0. The fork point is upstream
+tag v1.48.0 (commit 25021517f); every change since then is visible in this
+repository's git history and summarized in CHANGES-FROM-UPSTREAM.md.
+
+Modifications include: rebranding as ghosty-lite; removal of the desktop
+application, local inference, roaming, dictation, gateway, autovisualiser,
+Goose Apps, Nostr sharing, self-update and PostHog telemetry; a Spanish-first
+onboarding; and first-party operational telemetry.
+
+The telemetry client under crates/ghosty-telemetry is derived from ghostycode
+(https://github.com/blissito/ghostycode), MIT License, Copyright Héctor Bliss.
+
+"goose" and the goose logo are trademarks of Block, Inc. They are not used by
+this product except in this attribution notice.

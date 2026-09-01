@@ -1,0 +1,36 @@
+{
+  "name": "easybits",
+  "engine": "openai",
+  "display_name": "EasyBits",
+  "description": "DeepSeek vía EasyBits: una sola llave para el modelo y el MCP",
+  "api_key_env": "EASYBITS_API_KEY",
+  "base_url": "https://www.easybits.cloud/api/v2/llm/v1/chat/completions",
+  "models": [
+    {
+      "name": "deepseek-v4-flash",
+      "context_limit": 128000,
+      "input_token_cost": null,
+      "output_token_cost": null,
+      "currency": null,
+      "supports_cache_control": null
+    },
+    {
+      "name": "deepseek-v4-pro",
+      "context_limit": 128000,
+      "input_token_cost": null,
+      "output_token_cost": null,
+      "currency": null,
+      "supports_cache_control": null
+    }
+  ],
+  "headers": null,
+  "timeout_seconds": null,
+  "preserves_thinking": true,
+  "supports_streaming": true,
+  "setup": {
+    "category": "model",
+    "setup_method": "single_api_key",
+    "group": "default",
+    "docs_url": "https://www.easybits.cloud/dash/developer"
+  }
+}
