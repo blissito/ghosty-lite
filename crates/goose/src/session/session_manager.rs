@@ -1632,8 +1632,6 @@ impl SessionStorage {
             .await?;
 
         tx.commit().await?;
-        #[cfg(feature = "telemetry")]
-        crate::posthog::emit_session_started();
         Ok(session)
     }
 

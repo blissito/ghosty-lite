@@ -233,9 +233,6 @@ impl Operation<Session, GooseEffect> for RecipeOperation {
             }
         }
 
-        #[cfg(feature = "telemetry")]
-        crate::posthog::emit_custom_slash_command_used();
-
         let command_message = messages_since_kickoff(conversation)?
             .first()
             .ok_or_else(|| anyhow!("recipe command conversation has no kickoff message"))?;

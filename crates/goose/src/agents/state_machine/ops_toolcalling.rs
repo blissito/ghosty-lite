@@ -372,14 +372,7 @@ impl<'a> ToolExecutionOperation<'a> {
                 .extension_manager
                 .dispatch_tool_call(&context, tool_call.clone(), cancellation_token)
                 .await;
-            let result = result.unwrap_or_else(|error| {
-                #[cfg(feature = "telemetry")]
-                crate::posthog::emit_error(
-                    "tool_execution_failed",
-                    &format!("{}: {}", tool_call.name, error),
-                );
-                ToolCallResult::from(Err(error))
-            });
+            let result = result.unwrap_or_else(|error| ToolCallResult::from(Err(error)));
             Ok(with_post_tool_hooks(
                 &self.hook_manager,
                 result,

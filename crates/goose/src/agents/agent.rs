@@ -1293,14 +1293,7 @@ impl Agent {
                     cancellation_token.unwrap_or_default(),
                 )
                 .await;
-            result.unwrap_or_else(|error_data| {
-                #[cfg(feature = "telemetry")]
-                crate::posthog::emit_error(
-                    "tool_execution_failed",
-                    &format!("{}: {}", tool_call.name, error_data),
-                );
-                ToolCallResult::from(Err(error_data))
-            })
+            result.unwrap_or_else(|error_data| ToolCallResult::from(Err(error_data)))
         };
 
         debug!("WAITING_TOOL_END: {}", tool_call.name);
@@ -3077,8 +3070,6 @@ impl Agent {
                         #[allow(unused_variables)]
                         Err(ref provider_err @ ProviderError::ContextLengthExceeded(_)) => {
                             provider_errored = true;
-                            #[cfg(feature = "telemetry")]
-                            crate::posthog::emit_error(provider_err.telemetry_type(), &provider_err.to_string());
                             compaction_attempts += 1;
 
                             if compaction_attempts >= 2 {
@@ -3123,8 +3114,6 @@ impl Agent {
                                     break;
                                 }
                                 Err(e) => {
-                                    #[cfg(feature = "telemetry")]
-                                    crate::posthog::emit_error("compaction_failed", &e.to_string());
                                     error!("Compaction failed: {}", e);
                                     yield AgentEvent::Message(
                                         Message::assistant().with_text(
@@ -3137,8 +3126,6 @@ impl Agent {
                         }
                         Err(ref provider_err @ ProviderError::CreditsExhausted { details: _, ref top_up_url }) => {
                             provider_errored = true;
-                            #[cfg(feature = "telemetry")]
-                            crate::posthog::emit_error(provider_err.telemetry_type(), &provider_err.to_string());
                             error!("Error: {}", provider_err);
 
                             let user_msg = if top_up_url.is_some() {
@@ -3162,8 +3149,6 @@ impl Agent {
                         }
                         Err(ref provider_err @ ProviderError::Refusal { ref details, ref category }) => {
                             provider_errored = true;
-                            #[cfg(feature = "telemetry")]
-                            crate::posthog::emit_error(provider_err.telemetry_type(), &provider_err.to_string());
                             error!("Error: {}", provider_err);
 
                             let category = category.as_deref().map(|c| format!("\n\nCategory: {c}")).unwrap_or_default();
@@ -3178,8 +3163,6 @@ impl Agent {
                         }
                         Err(ref provider_err @ ProviderError::Authentication(_)) => {
                             provider_errored = true;
-                            #[cfg(feature = "telemetry")]
-                            crate::posthog::emit_error(provider_err.telemetry_type(), &provider_err.to_string());
                             error!("Error: {}", provider_err);
                             let message = persist_and_push_message_with_id(
                                 &session_manager,
@@ -3193,8 +3176,6 @@ impl Agent {
                         }
                         Err(ref provider_err @ ProviderError::NetworkError(_)) => {
                             provider_errored = true;
-                            #[cfg(feature = "telemetry")]
-                            crate::posthog::emit_error(provider_err.telemetry_type(), &provider_err.to_string());
                             error!("Error: {}", provider_err);
                             yield AgentEvent::Message(
                                 Message::assistant().with_text(
@@ -3205,8 +3186,6 @@ impl Agent {
                         }
                         Err(ref provider_err) => {
                             provider_errored = true;
-                            #[cfg(feature = "telemetry")]
-                            crate::posthog::emit_error(provider_err.telemetry_type(), &provider_err.to_string());
                             error!("Error: {}", provider_err);
                             yield AgentEvent::Message(
                                 Message::assistant().with_text(

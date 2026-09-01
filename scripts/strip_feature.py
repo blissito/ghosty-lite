@@ -72,9 +72,8 @@ def item_end(lines, i):
             elif c in '{([': depth += 1; seen_block = seen_block or c == '{'
             elif c in '})]':
                 depth -= 1
-                if depth == 0 and c == '}' and term is None:
-                    # cierre del bloque; consume coma final si la hay
-                    rest = line[j+1:].strip()
+                if depth == 0 and term is None and (c == '}' or seen_block):
+                    # cierre del bloque (o del `spawn(async { ... })` que lo envuelve)
                     return i + 1
             elif depth == 0 and term and c == term:
                 return i + 1
