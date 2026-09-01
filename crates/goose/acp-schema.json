@@ -631,117 +631,6 @@
       "x-side": "agent",
       "x-method": "_goose/unstable/resources/read"
     },
-    "AppsListRequest_unstable": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "x-side": "agent",
-      "x-method": "_goose/unstable/apps/list"
-    },
-    "AppsListResponse_unstable": {
-      "type": "object",
-      "properties": {
-        "apps": {
-          "type": "array",
-          "items": {},
-          "default": []
-        }
-      },
-      "x-side": "agent",
-      "x-method": "_goose/unstable/apps/list"
-    },
-    "AppsExportRequest_unstable": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "x-side": "agent",
-      "x-method": "_goose/unstable/apps/export"
-    },
-    "AppsExportResponse_unstable": {
-      "type": "object",
-      "properties": {
-        "html": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "html"
-      ],
-      "x-side": "agent",
-      "x-method": "_goose/unstable/apps/export"
-    },
-    "AppsImportRequest_unstable": {
-      "type": "object",
-      "properties": {
-        "html": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "html"
-      ],
-      "x-side": "agent",
-      "x-method": "_goose/unstable/apps/import"
-    },
-    "AppsImportResponse_unstable": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "message"
-      ],
-      "x-side": "agent",
-      "x-method": "_goose/unstable/apps/import"
-    },
-    "AppsDeleteRequest_unstable": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "x-side": "agent",
-      "x-method": "_goose/unstable/apps/delete"
-    },
-    "AppsDeleteResponse_unstable": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "message"
-      ],
-      "x-side": "agent",
-      "x-method": "_goose/unstable/apps/delete"
-    },
     "UpdateWorkingDirRequest_unstable": {
       "type": "object",
       "properties": {
@@ -5805,42 +5694,6 @@
                 {
                   "allOf": [
                     {
-                      "$ref": "#/$defs/AppsListRequest_unstable"
-                    }
-                  ],
-                  "description": "Params for _goose/unstable/apps/list",
-                  "title": "AppsListRequest_unstable"
-                },
-                {
-                  "allOf": [
-                    {
-                      "$ref": "#/$defs/AppsExportRequest_unstable"
-                    }
-                  ],
-                  "description": "Params for _goose/unstable/apps/export",
-                  "title": "AppsExportRequest_unstable"
-                },
-                {
-                  "allOf": [
-                    {
-                      "$ref": "#/$defs/AppsImportRequest_unstable"
-                    }
-                  ],
-                  "description": "Params for _goose/unstable/apps/import",
-                  "title": "AppsImportRequest_unstable"
-                },
-                {
-                  "allOf": [
-                    {
-                      "$ref": "#/$defs/AppsDeleteRequest_unstable"
-                    }
-                  ],
-                  "description": "Params for _goose/unstable/apps/delete",
-                  "title": "AppsDeleteRequest_unstable"
-                },
-                {
-                  "allOf": [
-                    {
                       "$ref": "#/$defs/UpdateWorkingDirRequest_unstable"
                     }
                   ],
@@ -6636,38 +6489,6 @@
                         }
                       ],
                       "title": "ReadResourceResponse_unstable"
-                    },
-                    {
-                      "allOf": [
-                        {
-                          "$ref": "#/$defs/AppsListResponse_unstable"
-                        }
-                      ],
-                      "title": "AppsListResponse_unstable"
-                    },
-                    {
-                      "allOf": [
-                        {
-                          "$ref": "#/$defs/AppsExportResponse_unstable"
-                        }
-                      ],
-                      "title": "AppsExportResponse_unstable"
-                    },
-                    {
-                      "allOf": [
-                        {
-                          "$ref": "#/$defs/AppsImportResponse_unstable"
-                        }
-                      ],
-                      "title": "AppsImportResponse_unstable"
-                    },
-                    {
-                      "allOf": [
-                        {
-                          "$ref": "#/$defs/AppsDeleteResponse_unstable"
-                        }
-                      ],
-                      "title": "AppsDeleteResponse_unstable"
                     },
                     {
                       "allOf": [

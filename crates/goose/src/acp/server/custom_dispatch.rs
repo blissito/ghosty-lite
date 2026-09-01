@@ -77,38 +77,6 @@ impl GooseAcpAgent {
         self.on_read_resource(req).await
     }
 
-    #[custom_method(AppsListRequest)]
-    async fn dispatch_list_apps(
-        &self,
-        req: AppsListRequest,
-    ) -> Result<AppsListResponse, agent_client_protocol::Error> {
-        self.on_list_apps(req).await
-    }
-
-    #[custom_method(AppsExportRequest)]
-    async fn dispatch_export_app(
-        &self,
-        req: AppsExportRequest,
-    ) -> Result<AppsExportResponse, agent_client_protocol::Error> {
-        self.on_export_app(req).await
-    }
-
-    #[custom_method(AppsImportRequest)]
-    async fn dispatch_import_app(
-        &self,
-        req: AppsImportRequest,
-    ) -> Result<AppsImportResponse, agent_client_protocol::Error> {
-        self.on_import_app(req).await
-    }
-
-    #[custom_method(AppsDeleteRequest)]
-    async fn dispatch_delete_app(
-        &self,
-        req: AppsDeleteRequest,
-    ) -> Result<AppsDeleteResponse, agent_client_protocol::Error> {
-        self.on_delete_app(req).await
-    }
-
     #[custom_method(UpdateWorkingDirRequest)]
     async fn dispatch_update_working_dir(
         &self,

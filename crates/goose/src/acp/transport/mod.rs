@@ -241,7 +241,6 @@ pub fn create_router(
     let aux_routes = Router::new()
         .route("/health", get(health))
         .route("/status", get(health))
-        .merge(super::mcp_app_proxy::routes(secret_key))
         .layer(aux_cors_layer());
 
     acp_routes.merge(aux_routes)
