@@ -5,6 +5,7 @@ pub mod plugin;
 pub mod recipe;
 pub mod review;
 pub mod schedule;
+pub mod serve_setup;
 pub mod session;
 pub mod skills;
 pub mod term;

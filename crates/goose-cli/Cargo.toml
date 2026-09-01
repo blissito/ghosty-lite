@@ -23,6 +23,7 @@ path = "src/bin/mcp_conformance_driver.rs"
 goose = { path = "../goose", default-features = false }
 goose-mcp = { path = "../goose-mcp", default-features = false }
 goose-providers = { path = "../goose-providers", default-features = false }
+ghosty-telemetry = { path = "../ghosty-telemetry" }
 rmcp = { workspace = true }
 clap = { workspace = true }
 cliclack = { version = "0.5", default-features = false }
@@ -77,7 +78,8 @@ winapi = { workspace = true, features = [
 libc = { version = "0.2.182", default-features = false, features = ["std"] }
 
 [features]
-default = ["rustls-tls"]
+default = ["rustls-tls", "telemetry"]
+telemetry = ["goose/telemetry"]
 code-mode = ["goose/code-mode"]
 aws-providers = ["goose/aws-providers"]
 otel = ["goose/otel"]

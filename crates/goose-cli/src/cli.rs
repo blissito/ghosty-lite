@@ -35,7 +35,7 @@ use std::io::Read;
 use std::path::PathBuf;
 const GHOSTY_SERVER_TOKEN_ENV: &str = "GHOSTY_SERVER_TOKEN";
 
-fn generate_serve_secret_key() -> String {
+pub(crate) fn generate_serve_secret_key() -> String {
     use rand::distr::{Alphanumeric, SampleString};
 
     format!("ghl-{}", Alphanumeric.sample_string(&mut rand::rng(), 32))
@@ -71,8 +71,8 @@ pub struct Identifier {
         short = 'n',
         long,
         value_name = "NAME",
-        help = "Name for the chat session (e.g., 'project-x')",
-        long_help = "Specify a name for your chat session. When used with --resume, will resume this specific session if it exists."
+        help = "Nombre de la sesión (ej. 'project-x')",
+        long_help = "Nombre de la sesión de chat. Con --resume, reanuda esa sesión si existe."
     )]
     pub name: Option<String>,
 
@@ -80,17 +80,16 @@ pub struct Identifier {
         long = "session-id",
         alias = "id",
         value_name = "SESSION_ID",
-        help = "Session ID (e.g., '20250921_143022')",
-        long_help = "Specify a session ID to resume. Requires --resume."
+        help = "ID de sesión (ej. '20250921_143022')",
+        long_help = "ID de la sesión a reanudar. Requiere --resume."
     )]
     pub session_id: Option<String>,
 
     #[arg(
         long,
         value_name = "PATH",
-        help = "Legacy: Path for the chat session",
-        long_help = "Legacy parameter for backward compatibility. Extracts session ID from the file path (e.g., '/path/to/20250325_200615.
-jsonl' -> '20250325_200615')."
+        help = "Legado: ruta de la sesión de chat",
+        long_help = "Parámetro de compatibilidad. Saca el ID de sesión de la ruta del archivo (ej. '/ruta/a/20250325_200615.jsonl' -> '20250325_200615')."
     )]
     pub path: Option<PathBuf>,
 }
@@ -100,32 +99,32 @@ jsonl' -> '20250325_200615')."
 pub struct SessionOptions {
     #[arg(
         long,
-        help = "Enable debug output mode with full content and no truncation",
-        long_help = "When enabled, shows complete tool responses without truncation and full paths."
+        help = "Modo debug: contenido completo, sin truncar",
+        long_help = "Muestra las respuestas de las herramientas completas, sin truncar, y las rutas enteras."
     )]
     pub debug: bool,
 
     #[arg(
         long = "max-tool-repetitions",
         value_name = "NUMBER",
-        help = "Maximum number of consecutive identical tool calls allowed",
-        long_help = "Set a limit on how many times the same tool can be called consecutively with identical parameters. Helps prevent infinite loops."
+        help = "Máximo de llamadas idénticas y consecutivas a una herramienta",
+        long_help = "Cuántas veces seguidas se puede llamar a la misma herramienta con los mismos parámetros. Evita bucles infinitos."
     )]
     pub max_tool_repetitions: Option<u32>,
 
     #[arg(
         long = "max-turns",
         value_name = "NUMBER",
-        help = "Maximum number of turns allowed without user input (default: 1000)",
-        long_help = "Set a limit on how many turns (iterations) the agent can take without asking for user input to continue."
+        help = "Turnos máximos sin intervención del usuario (default: 1000)",
+        long_help = "Cuántos turnos (iteraciones) puede dar el agente sin pedirte nada para continuar."
     )]
     pub max_turns: Option<u32>,
 
     #[arg(
         long = "container",
         value_name = "CONTAINER_ID",
-        help = "Docker container ID to run extensions inside",
-        long_help = "Run extensions (stdio and built-in) inside the specified container. The extension must exist in the container. For built-in extensions, goose must be installed inside the container."
+        help = "ID del contenedor Docker donde correr las extensiones",
+        long_help = "Corre las extensiones (stdio y builtin) dentro del contenedor indicado. La extensión debe existir ahí. Para las builtin, ghosty debe estar instalado dentro del contenedor."
     )]
     pub container: Option<String>,
 }
@@ -168,8 +167,8 @@ pub struct ExtensionOptions {
     #[arg(
         long = "with-extension",
         value_name = "COMMAND",
-        help = "Add stdio extensions (can be specified multiple times)",
-        long_help = "Add stdio extensions from full commands with environment variables. Can be specified multiple times. Format: '[name:]ENV1=val1 ENV2=val2 command args...'. Without the optional name, the extension is named after the command, which is the launcher for anything started through one ('npx', 'python', 'uvx', ...); extensions that would end up sharing a name are instead named after their full command line.",
+        help = "Agrega extensiones stdio (se puede repetir)",
+        long_help = "Agrega extensiones stdio a partir del comando completo con variables de entorno. Se puede repetir. Formato: '[nombre:]ENV1=val1 ENV2=val2 comando args...'. Sin el nombre opcional, la extensión se llama como el comando, que es el lanzador cuando se arranca a través de uno ('npx', 'python', 'uvx', ...); las que acabarían con el mismo nombre se llaman por su línea de comando completa.",
         action = clap::ArgAction::Append
     )]
     pub extensions: Vec<String>,
@@ -177,8 +176,8 @@ pub struct ExtensionOptions {
     #[arg(
         long = "with-streamable-http-extension",
         value_name = "URL",
-        help = "Add streamable HTTP extensions (can be specified multiple times)",
-        long_help = "Add streamable HTTP extensions from a URL. Can be specified multiple times. Format: 'url...' or 'url... timeout=100' to set up timeout other than default",
+        help = "Agrega extensiones Streamable HTTP (se puede repetir)",
+        long_help = "Agrega extensiones Streamable HTTP desde una URL. Se puede repetir. Formato: 'url...' o 'url... timeout=100' para cambiar el timeout",
         action = clap::ArgAction::Append,
         value_parser = parse_streamable_http_extension
     )]
@@ -187,15 +186,15 @@ pub struct ExtensionOptions {
     #[arg(
         long = "with-builtin",
         value_name = "NAME",
-        help = "Add builtin extensions by name (e.g., 'developer' or multiple: 'developer,github')",
-        long_help = "Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated",
+        help = "Agrega extensiones builtin por nombre (ej. 'developer' o varias: 'developer,memory')",
+        long_help = "Una o más extensiones builtin que vienen con ghosty, por nombre y separadas por coma",
         value_delimiter = ','
     )]
     pub builtins: Vec<String>,
 
     #[arg(
         long = "no-profile",
-        help = "Don't load your default extensions, only use CLI-specified extensions"
+        help = "No cargues las extensiones por defecto; sólo las indicadas en la línea de comandos"
     )]
     pub no_profile: bool,
 }
@@ -208,7 +207,7 @@ pub struct InputOptions {
         short,
         long,
         value_name = "FILE",
-        help = "Path to instruction file containing commands. Use - for stdin.",
+        help = "Ruta al archivo de instrucciones. Usa - para stdin.",
         conflicts_with = "input_text",
         conflicts_with = "recipe"
     )]
@@ -219,8 +218,8 @@ pub struct InputOptions {
         short = 't',
         long = "text",
         value_name = "TEXT",
-        help = "Input text to provide to goose directly",
-        long_help = "Input text containing commands for goose. Use this in lieu of the instructions argument.",
+        help = "Texto de entrada para ghosty",
+        long_help = "Texto con las instrucciones para ghosty. Sustituye al argumento del archivo de instrucciones.",
         conflicts_with = "instructions",
         conflicts_with = "recipe"
     )]
@@ -231,8 +230,8 @@ pub struct InputOptions {
         short = None,
         long = "recipe",
         value_name = "RECIPE_NAME or FULL_PATH_TO_RECIPE_FILE",
-        help = "Recipe name to get recipe file or the full path of the recipe file (use --explain to see recipe details)",
-        long_help = "Recipe name to get recipe file or the full path of the recipe file that defines a custom agent configuration. Use --explain to see the recipe's title, description, and parameters.",
+        help = "Nombre o ruta completa de la receta (usa --explain para ver sus detalles)",
+        long_help = "Nombre o ruta completa del archivo de receta que define la configuración del agente. Con --explain se ven título, descripción y parámetros.",
         conflicts_with = "instructions",
         conflicts_with = "input_text"
     )]
@@ -242,8 +241,8 @@ pub struct InputOptions {
     #[arg(
         long = "system",
         value_name = "TEXT",
-        help = "Additional system prompt to customize agent behavior",
-        long_help = "Provide additional system instructions to customize the agent's behavior",
+        help = "System prompt adicional para ajustar al agente",
+        long_help = "Instrucciones de sistema adicionales para ajustar el comportamiento del agente",
         conflicts_with = "recipe"
     )]
     pub system: Option<String>,
@@ -251,8 +250,8 @@ pub struct InputOptions {
     #[arg(
         long,
         value_name = "KEY=VALUE",
-        help = "Dynamic parameters (e.g., --params username=alice --params channel_name=goose-channel)",
-        long_help = "Key-value parameters to pass to the recipe file. Can be specified multiple times.",
+        help = "Parámetros dinámicos (ej. --params username=alice --params channel_name=general)",
+        long_help = "Parámetros clave=valor para la receta. Se puede repetir.",
         action = clap::ArgAction::Append,
         value_parser = parse_key_val,
     )]
@@ -262,8 +261,8 @@ pub struct InputOptions {
     #[arg(
         long = "sub-recipe",
         value_name = "RECIPE",
-        help = "Sub-recipe name or file path (can be specified multiple times)",
-        long_help = "Specify sub-recipes to include alongside the main recipe. Can be:\n  - Recipe names from GitHub (if GHOSTY_RECIPE_GITHUB_REPO is configured)\n  - Local file paths to YAML files\nCan be specified multiple times to include multiple sub-recipes.",
+        help = "Nombre o ruta de sub-receta (se puede repetir)",
+        long_help = "Sub-recetas que acompañan a la principal. Pueden ser:\n  - Nombres de receta en GitHub (si GHOSTY_RECIPE_GITHUB_REPO está configurado)\n  - Rutas locales a archivos YAML\nSe puede repetir para incluir varias.",
         action = clap::ArgAction::Append
     )]
     pub additional_sub_recipes: Vec<String>,
@@ -271,14 +270,14 @@ pub struct InputOptions {
     /// Show the recipe title, description, and parameters
     #[arg(
         long = "explain",
-        help = "Show the recipe title, description, and parameters"
+        help = "Muestra título, descripción y parámetros de la receta"
     )]
     pub explain: bool,
 
     /// Print the rendered recipe instead of running it
     #[arg(
         long = "render-recipe",
-        help = "Print the rendered recipe instead of running it."
+        help = "Imprime la receta renderizada en vez de correrla."
     )]
     pub render_recipe: bool,
 }
@@ -290,7 +289,7 @@ pub struct OutputOptions {
     #[arg(
         short = 'q',
         long = "quiet",
-        help = "Quiet mode. Suppress non-response output, printing only the model response to stdout"
+        help = "Modo silencioso: sólo la respuesta del modelo a stdout"
     )]
     pub quiet: bool,
 
@@ -298,7 +297,7 @@ pub struct OutputOptions {
     #[arg(
         long = "output-format",
         value_name = "FORMAT",
-        help = "Output format (text, json, stream-json)",
+        help = "Formato de salida (text, json, stream-json)",
         default_value = "text",
         value_parser = clap::builder::PossibleValuesParser::new(["text", "json", "stream-json"])
     )]
@@ -321,8 +320,8 @@ pub struct ModelOptions {
     #[arg(
         long = "provider",
         value_name = "PROVIDER",
-        help = "Specify the LLM provider to use (e.g., 'openai', 'anthropic')",
-        long_help = "Override the GHOSTY_PROVIDER environment variable for this run. Available providers include openai, anthropic, ollama, databricks, gemini-cli, claude-code, and others."
+        help = "Proveedor de LLM a usar (ej. 'openai', 'anthropic')",
+        long_help = "Pisa GHOSTY_PROVIDER sólo para esta ejecución. Hay easybits, anthropic, openai, ollama y otros."
     )]
     pub provider: Option<String>,
 
@@ -330,8 +329,8 @@ pub struct ModelOptions {
     #[arg(
         long = "model",
         value_name = "MODEL",
-        help = "Specify the model to use (e.g., 'gpt-4o', 'claude-sonnet-4-20250514')",
-        long_help = "Override the GHOSTY_MODEL environment variable for this run. The model must be supported by the specified provider."
+        help = "Modelo a usar (ej. 'deepseek-v4-flash', 'claude-sonnet-4-20250514')",
+        long_help = "Pisa GHOSTY_MODEL sólo para esta ejecución. El proveedor debe soportar el modelo."
     )]
     pub model: Option<String>,
 }
@@ -343,15 +342,15 @@ pub struct RunBehavior {
     #[arg(
         short = 's',
         long = "interactive",
-        help = "Continue in interactive mode after processing initial input"
+        help = "Sigue en modo interactivo tras procesar la entrada inicial"
     )]
     pub interactive: bool,
 
     /// Run without storing a session file
     #[arg(
         long = "no-session",
-        help = "Run without storing a session file",
-        long_help = "Execute commands without creating or using a session file. Useful for automated runs.",
+        help = "Corre sin guardar sesión",
+        long_help = "Ejecuta sin crear ni usar sesión. Útil para corridas automatizadas.",
         conflicts_with_all = ["resume", "name", "path"]
     )]
     pub no_session: bool,
@@ -361,15 +360,15 @@ pub struct RunBehavior {
         short,
         long,
         action = clap::ArgAction::SetTrue,
-        help = "Resume from a previous run",
-        long_help = "Continue from a previous run, maintaining the execution state and context."
+        help = "Reanuda una corrida anterior",
+        long_help = "Continúa una corrida anterior conservando estado y contexto."
     )]
     pub resume: bool,
 
     /// Print generation statistics after completion
     #[arg(
         long = "stats",
-        help = "Print generation statistics after the run completes"
+        help = "Imprime estadísticas de generación al terminar"
     )]
     pub stats: bool,
 
@@ -377,8 +376,8 @@ pub struct RunBehavior {
     #[arg(
         long = "scheduled-job-id",
         value_name = "ID",
-        help = "ID of the scheduled job that triggered this execution (internal use)",
-        long_help = "Internal parameter used when this run command is executed by a scheduled job. This associates the session with the schedule for tracking purposes.",
+        help = "ID del trabajo programado que disparó esta ejecución (uso interno)",
+        long_help = "Parámetro interno cuando este run lo dispara un trabajo programado. Asocia la sesión al schedule.",
         hide = true
     )]
     pub scheduled_job_id: Option<String>,
@@ -500,20 +499,20 @@ fn parse_key_val(s: &str) -> Result<(String, String), String> {
 
 #[derive(Subcommand)]
 enum SessionCommand {
-    #[command(about = "List all available sessions")]
+    #[command(about = "Lista las sesiones")]
     List {
         #[arg(
             short,
             long,
-            help = "Output format (text, json)",
+            help = "Formato de salida (text, json)",
             default_value = "text"
         )]
         format: String,
 
         #[arg(
             long = "ascending",
-            help = "Sort by date in ascending order (oldest first)",
-            long_help = "Sort sessions by date in ascending order (oldest first). Default is descending order (newest first)."
+            help = "Ordena por fecha ascendente (la más vieja primero)",
+            long_help = "Ordena por fecha ascendente (la más vieja primero). Por defecto es descendente."
         )]
         ascending: bool,
 
@@ -521,25 +520,21 @@ enum SessionCommand {
             short = 'w',
             short_alias = 'p',
             long = "working_dir",
-            help = "Filter sessions by working directory"
+            help = "Filtra por directorio de trabajo"
         )]
         working_dir: Option<PathBuf>,
 
-        #[arg(short = 'l', long = "limit", help = "Limit the number of results")]
+        #[arg(short = 'l', long = "limit", help = "Limita el número de resultados")]
         limit: Option<usize>,
     },
-    #[command(about = "Remove sessions. Runs interactively if no ID, name, or regex is provided.")]
+    #[command(about = "Borra sesiones. Interactivo si no das ID, nombre ni regex.")]
     Remove {
         #[command(flatten)]
         identifier: Option<Identifier>,
-        #[arg(
-            short = 'r',
-            long,
-            help = "Regex for removing matched sessions (optional)"
-        )]
+        #[arg(short = 'r', long, help = "Regex de las sesiones a borrar (opcional)")]
         regex: Option<String>,
     },
-    #[command(about = "Export a session")]
+    #[command(about = "Exporta una sesión")]
     Export {
         #[command(flatten)]
         identifier: Option<Identifier>,
@@ -547,23 +542,23 @@ enum SessionCommand {
         #[arg(
             short,
             long,
-            help = "Output file path (default: stdout)",
-            long_help = "Path to save the exported Markdown. If not provided, output will be sent to stdout"
+            help = "Archivo de salida (default: stdout)",
+            long_help = "Ruta donde guardar el export. Sin ella, sale por stdout"
         )]
         output: Option<PathBuf>,
 
         #[arg(
             long = "format",
             value_name = "FORMAT",
-            help = "Output format (markdown, json, yaml)",
+            help = "Formato de salida (markdown, json, yaml)",
             default_value = "markdown"
         )]
         format: String,
     },
-    #[command(about = "Import a session from JSON or a Claude Code / Codex / Pi .jsonl")]
+    #[command(about = "Importa una sesión desde JSON o un .jsonl de Claude Code / Codex / Pi")]
     Import {
         #[arg(
-            help = "Path to a goose session export or a Claude Code, Codex, or Pi .jsonl transcript"
+            help = "Ruta a un export de sesión de ghosty o a un .jsonl de Claude Code, Codex o Pi"
         )]
         input: String,
     },
@@ -579,222 +574,225 @@ enum SessionCommand {
 
 #[derive(Subcommand, Debug)]
 enum SchedulerCommand {
-    #[command(about = "Add a new scheduled job")]
+    #[command(about = "Agrega un trabajo programado")]
     Add {
         #[arg(
             long = "schedule-id",
             alias = "id",
-            help = "Unique ID for the recurring scheduled job"
+            help = "ID único del trabajo recurrente"
         )]
         schedule_id: String,
         #[arg(
             long,
-            help = "Cron expression for the schedule",
-            long_help = "Cron expression for when to run the job. Examples:\n  '0 * * * *'     - Every hour at minute 0\n  '0 */2 * * *'   - Every 2 hours\n  '@hourly'       - Every hour (shorthand)\n  '0 9 * * *'     - Every day at 9:00 AM\n  '0 9 * * 1'     - Every Monday at 9:00 AM\n  '0 0 1 * *'     - First day of every month at midnight"
+            help = "Expresión cron",
+            long_help = "Expresión cron de cuándo correr. Ejemplos:\n  '0 * * * *'     - cada hora, al minuto 0\n  '0 */2 * * *'   - cada 2 horas\n  '@hourly'       - cada hora (atajo)\n  '0 9 * * *'     - todos los días a las 9:00\n  '0 9 * * 1'     - los lunes a las 9:00\n  '0 0 1 * *'     - el primer día de cada mes a medianoche"
         )]
         cron: String,
-        #[arg(
-            long,
-            help = "Recipe source (path to file, or base64 encoded recipe string)"
-        )]
+        #[arg(long, help = "Receta (ruta al archivo o receta en base64)")]
         recipe_source: String,
         #[arg(
             long,
             value_name = "KEY=VALUE",
-            help = "Recipe parameter in KEY=VALUE format (can be specified multiple times)",
+            help = "Parámetro de la receta en formato CLAVE=VALOR (se puede repetir)",
             action = clap::ArgAction::Append,
             value_parser = parse_key_val,
         )]
         params: Vec<(String, String)>,
     },
-    #[command(about = "List all scheduled jobs")]
+    #[command(about = "Lista los trabajos programados")]
     List {},
-    #[command(about = "Remove a scheduled job by ID")]
+    #[command(about = "Quita un trabajo programado por ID")]
     Remove {
         #[arg(
             long = "schedule-id",
             alias = "id",
-            help = "ID of the scheduled job to remove (removes the recurring schedule)"
+            help = "ID del trabajo a quitar (elimina la recurrencia)"
         )]
         schedule_id: String,
     },
     /// List sessions created by a specific schedule
-    #[command(about = "List sessions created by a specific schedule")]
+    #[command(about = "Lista las sesiones creadas por un schedule")]
     Sessions {
         /// ID of the schedule
-        #[arg(long = "schedule-id", alias = "id", help = "ID of the schedule")]
+        #[arg(long = "schedule-id", alias = "id", help = "ID del schedule")]
         schedule_id: String,
-        #[arg(short = 'l', long, help = "Maximum number of sessions to return")]
+        #[arg(short = 'l', long, help = "Máximo de sesiones a devolver")]
         limit: Option<usize>,
     },
-    #[command(about = "Run a scheduled job immediately")]
+    #[command(about = "Corre un trabajo programado ahora")]
     RunNow {
         /// ID of the schedule to run
-        #[arg(long = "schedule-id", alias = "id", help = "ID of the schedule to run")]
+        #[arg(long = "schedule-id", alias = "id", help = "ID del schedule a correr")]
         schedule_id: String,
     },
     /// Check status of scheduler services (deprecated - no external services needed)
-    #[command(about = "[Deprecated] Check status of scheduler services")]
+    #[command(about = "[Obsoleto] Estado de los servicios del scheduler")]
     ServicesStatus {},
     /// Stop scheduler services (deprecated - no external services needed)
-    #[command(about = "[Deprecated] Stop scheduler services")]
+    #[command(about = "[Obsoleto] Detiene los servicios del scheduler")]
     ServicesStop {},
     /// Show cron expression examples and help
-    #[command(about = "Show cron expression examples and help")]
+    #[command(about = "Ejemplos y ayuda de expresiones cron")]
     CronHelp {},
 }
 
 #[derive(Subcommand)]
 enum PluginCommand {
     /// Install a plugin from a git repository URL
-    #[command(about = "Install a plugin from a git repository URL")]
+    #[command(about = "Instala un plugin desde la URL de un repo git")]
     Install {
         #[arg(
             long,
-            help = "Automatically update this plugin before plugin skills are loaded"
+            help = "Actualiza el plugin automáticamente antes de cargar sus skills"
         )]
         auto_update: bool,
 
-        #[arg(help = "URL to a git repository containing a supported plugin")]
+        #[arg(help = "URL de un repo git con un plugin soportado")]
         url: String,
     },
 
     /// Update an installed git-backed plugin
-    #[command(about = "Update an installed git-backed plugin")]
+    #[command(about = "Actualiza un plugin instalado desde git")]
     Update {
-        #[arg(help = "Name of the installed plugin to update")]
+        #[arg(help = "Nombre del plugin a actualizar")]
         name: String,
     },
 }
 
 #[derive(Subcommand)]
 enum SkillsCommand {
-    /// List all skills available to the goose agent
-    #[command(about = "List all skills available to the goose agent")]
+    /// Lista las skills disponibles para el agente
+    #[command(about = "Lista las skills disponibles para el agente")]
     List,
 }
 
 #[derive(Subcommand)]
 enum RecipeCommand {
     /// Validate a recipe file
-    #[command(about = "Validate a recipe")]
+    #[command(about = "Valida una receta")]
     Validate {
         /// Recipe name to get recipe file to validate
-        #[arg(help = "recipe name to get recipe file or full path to the recipe file to validate")]
+        #[arg(help = "nombre o ruta completa de la receta a validar")]
         recipe_name: String,
     },
 
     /// Generate a deeplink for a recipe file
-    #[command(about = "Generate a deeplink for a recipe")]
+    #[command(about = "Genera un deeplink de una receta")]
     Deeplink {
         /// Recipe name to get recipe file to generate deeplink
-        #[arg(
-            help = "recipe name to get recipe file or full path to the recipe file to generate deeplink"
-        )]
+        #[arg(help = "nombre o ruta completa de la receta")]
         recipe_name: String,
         /// Recipe parameters in key=value format (can be specified multiple times)
         #[arg(
             short = 'p',
             long = "param",
             value_name = "KEY=VALUE",
-            help = "Recipe parameter in key=value format (can be specified multiple times)"
+            help = "Parámetro de la receta en formato clave=valor (se puede repetir)"
         )]
         params: Vec<String>,
     },
 
-    /// Open a recipe in Goose Desktop
-    #[command(about = "Open a recipe in Goose Desktop")]
+    /// Abre una receta en la app de escritorio
+    #[command(about = "Abre una receta en la app de escritorio")]
     Open {
         /// Recipe name to get recipe file to open
-        #[arg(help = "recipe name or full path to the recipe file")]
+        #[arg(help = "nombre o ruta completa de la receta")]
         recipe_name: String,
         /// Recipe parameters in key=value format (can be specified multiple times)
         #[arg(
             short = 'p',
             long = "param",
             value_name = "KEY=VALUE",
-            help = "Recipe parameter in key=value format (can be specified multiple times)"
+            help = "Parámetro de la receta en formato clave=valor (se puede repetir)"
         )]
         params: Vec<String>,
     },
 
     /// List available recipes
-    #[command(about = "List available recipes")]
+    #[command(about = "Lista las recetas disponibles")]
     List {
         /// Output format (text, json)
         #[arg(
             long = "format",
             value_name = "FORMAT",
-            help = "Output format (text, json)",
+            help = "Formato de salida (text, json)",
             default_value = "text"
         )]
         format: String,
 
         /// Show verbose information including recipe descriptions
-        #[arg(
-            short,
-            long,
-            help = "Show verbose information including recipe descriptions"
-        )]
+        #[arg(short, long, help = "Información detallada, con descripciones")]
         verbose: bool,
     },
 }
 
 #[derive(Subcommand)]
 enum Command {
-    /// Configure goose settings
-    #[command(about = "Configure goose settings")]
+    /// Configura ghosty
+    #[command(about = "Configura ghosty: proveedor, extensiones, servidor y ajustes")]
     Configure {},
 
-    /// Display goose configuration information
-    #[command(about = "Display goose information")]
+    /// Muestra la información de ghosty
+    #[command(about = "Muestra versión, rutas y estado de ghosty")]
     Info {
         /// Show verbose information including current configuration
-        #[arg(short, long, help = "Show verbose information including config.yaml")]
+        #[arg(short, long, help = "Información detallada, incluido config.yaml")]
         verbose: bool,
-        #[arg(long, help = "Test provider connection and show status")]
+        #[arg(long, help = "Prueba la conexión con el proveedor")]
         check: bool,
     },
 
-    #[command(about = "Check that your Goose setup is working")]
+    #[command(about = "Comprueba que tu instalación de ghosty funciona")]
     Doctor {},
 
     /// Manage system prompts and behaviors
-    #[command(about = "Run one of the mcp servers bundled with goose")]
+    #[command(about = "Corre uno de los servidores MCP que vienen con ghosty")]
     Mcp {
         #[arg(value_parser = clap::value_parser!(McpCommand))]
         server: McpCommand,
     },
 
-    /// Run goose as an ACP (Agent Client Protocol) agent
-    #[command(about = "Run goose as an ACP agent server on stdio")]
+    /// Corre ghosty como agente ACP (Agent Client Protocol)
+    #[command(about = "Corre ghosty como agente ACP por stdio")]
     Acp {
         /// Add builtin extensions by name
         #[arg(
             long = "with-builtin",
             value_name = "NAME",
-            help = "Add builtin extensions by name (e.g., 'developer' or multiple: 'developer,github')",
-            long_help = "Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated",
+            help = "Agrega extensiones builtin por nombre (ej. 'developer' o varias: 'developer,memory')",
+            long_help = "Una o más extensiones builtin que vienen con ghosty, por nombre y separadas por coma",
             value_delimiter = ','
         )]
         builtins: Vec<String>,
 
-        #[arg(long, help = "Enable scheduled recipe execution")]
+        #[arg(long, help = "Activa la ejecución programada de recetas")]
         enable_scheduler: bool,
     },
 
     /// Share or connect to agents peer-to-peer over iroh
 
     /// Start ACP server over HTTP and WebSocket
-    #[command(about = "Start ACP server over HTTP and WebSocket")]
+    #[command(about = "Arranca el servidor ACP por HTTP y WebSocket")]
     Serve {
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
+        #[arg(long, help = "Host donde escuchar (default: el guardado, o 127.0.0.1)")]
+        host: Option<String>,
 
-        #[arg(long, default_value = "3284")]
-        port: u16,
+        #[arg(long, help = "Puerto (default: el guardado, o 3284)")]
+        port: Option<u16>,
 
-        #[arg(long, help = "Serve ACP over TLS")]
+        #[arg(
+            long,
+            help = "Asistente interactivo: token, host, puerto, orígenes y builtins"
+        )]
+        setup: bool,
+
+        #[arg(
+            long,
+            help = "Comprueba que el servidor puede arrancar tal como está (sale 0 o 1)"
+        )]
+        check: bool,
+
+        #[arg(long, help = "Sirve ACP con TLS")]
         tls: bool,
 
         #[arg(long = "tls-cert-path", value_name = "PATH")]
@@ -809,8 +807,8 @@ enum Command {
         #[arg(
             long = "with-builtin",
             value_name = "NAME",
-            help = "Add builtin extensions by name (e.g., 'developer' or multiple: 'developer,github')",
-            long_help = "Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated",
+            help = "Agrega extensiones builtin por nombre (ej. 'developer' o varias: 'developer,memory')",
+            long_help = "Una o más extensiones builtin que vienen con ghosty, por nombre y separadas por coma",
             value_delimiter = ',',
             action = clap::ArgAction::Append
         )]
@@ -818,7 +816,7 @@ enum Command {
 
         #[arg(
             long = "dangerously-unauthenticated",
-            help = "Start the ACP endpoint without requiring GHOSTY_SERVER_TOKEN"
+            help = "Arranca el endpoint ACP sin exigir GHOSTY_SERVER_TOKEN"
         )]
         dangerously_unauthenticated: bool,
 
@@ -826,17 +824,17 @@ enum Command {
             long = "allowed-origin",
             value_name = "ORIGIN",
             action = clap::ArgAction::Append,
-            help = "Allow an exact Origin value for ACP CORS; may be specified multiple times and replaces the default loopback origins"
+            help = "Permite un Origin exacto para CORS de ACP; se puede repetir y REEMPLAZA los orígenes loopback por defecto"
         )]
         allowed_origins: Vec<String>,
 
-        #[arg(long, help = "Enable scheduled recipe execution")]
+        #[arg(long, help = "Activa la ejecución programada de recetas")]
         enable_scheduler: bool,
     },
 
     /// Start or resume interactive chat sessions
     #[command(
-        about = "Start or resume interactive chat sessions",
+        about = "Inicia o reanuda una sesión de chat interactiva",
         visible_alias = "s"
     )]
     Session {
@@ -850,8 +848,8 @@ enum Command {
         #[arg(
             short,
             long,
-            help = "Resume a previous session (last used or specified by --name/--session-id)",
-            long_help = "Continue from a previous session. If --name or --session-id is provided, resumes that specific session. Otherwise, resumes the most recently used session."
+            help = "Reanuda una sesión anterior (la última, o la de --name/--session-id)",
+            long_help = "Continúa una sesión anterior. Con --name o --session-id reanuda ésa; si no, la más reciente."
         )]
         resume: bool,
 
@@ -859,8 +857,8 @@ enum Command {
         #[arg(
             long,
             requires = "resume",
-            help = "Fork a previous session (creates new session with copied history)",
-            long_help = "Create a new session by copying all messages from a previous session. Must be used with --resume. If --name or --session-id is provided, forks that specific session. Otherwise, forks the most recently used session."
+            help = "Bifurca una sesión anterior (nueva sesión con el historial copiado)",
+            long_help = "Crea una sesión nueva copiando los mensajes de otra. Requiere --resume. Con --name o --session-id bifurca ésa; si no, la más reciente."
         )]
         fork: bool,
 
@@ -868,15 +866,15 @@ enum Command {
         #[arg(
             long,
             requires = "resume",
-            help = "Edit the session conversation in $EDITOR before starting",
-            long_help = "Open the session's conversation in your editor ($VISUAL / $EDITOR / vi) for modification before resuming. When combined with --fork, creates a new session from the edited result."
+            help = "Edita la conversación en $EDITOR antes de empezar",
+            long_help = "Abre la conversación en tu editor ($VISUAL / $EDITOR / vi) antes de reanudar. Con --fork, crea una sesión nueva a partir del resultado editado."
         )]
         edit: bool,
 
         /// Show message history when resuming
         #[arg(
             long,
-            help = "Show previous messages when resuming a session",
+            help = "Muestra los mensajes anteriores al reanudar",
             requires = "resume"
         )]
         history: bool,
@@ -892,7 +890,7 @@ enum Command {
     },
 
     /// Execute commands from an instruction file
-    #[command(about = "Execute commands from an instruction file or stdin")]
+    #[command(about = "Ejecuta instrucciones desde un archivo o stdin")]
     Run {
         #[command(flatten)]
         input_opts: InputOptions,
@@ -917,28 +915,28 @@ enum Command {
     },
 
     /// Recipe utilities for validation and deeplinking
-    #[command(about = "Recipe utilities for validation and deeplinking")]
+    #[command(about = "Utilidades de recetas: validar y deeplinks")]
     Recipe {
         #[command(subcommand)]
         command: RecipeCommand,
     },
 
     /// Skill utilities
-    #[command(about = "Skill utilities")]
+    #[command(about = "Utilidades de skills")]
     Skills {
         #[command(subcommand)]
         command: SkillsCommand,
     },
 
     /// Manage plugins
-    #[command(about = "Manage plugins")]
+    #[command(about = "Administra plugins")]
     Plugin {
         #[command(subcommand)]
         command: PluginCommand,
     },
 
     /// Manage scheduled jobs
-    #[command(about = "Manage scheduled jobs", visible_alias = "sched")]
+    #[command(about = "Administra trabajos programados", visible_alias = "sched")]
     Schedule {
         #[command(subcommand)]
         command: SchedulerCommand,
@@ -946,16 +944,16 @@ enum Command {
 
     /// Terminal-integrated session (one session per terminal)
     #[command(
-        about = "Terminal-integrated goose session",
-        long_about = "Runs a goose session tied to your terminal window.\n\
-                      Each terminal maintains its own persistent session that resumes automatically.\n\n\
-                      Setup:\n  \
-                        eval \"$(goose term init zsh)\"  # zsh/bash\n  \
-                        let init = ($nu.cache-dir | path join \"goose-term-init.nu\"); ^goose term init nu | save --force $init; source $init\n\n\
-                      Usage:\n  \
-                        goose term run \"list files in this directory\"\n  \
-                        @goose \"create a python script\"  # using alias\n  \
-                        @g \"quick question\"  # short alias"
+        about = "Sesión de ghosty integrada a la terminal",
+        long_about = "Corre una sesión de ghosty atada a tu ventana de terminal.\n\
+                      Cada terminal mantiene su propia sesión persistente, que se reanuda sola.\n\n\
+                      Instalación:\n  \
+                        eval \"$(ghosty term init zsh)\"  # zsh/bash\n  \
+                        let init = ($nu.cache-dir | path join \"ghosty-term-init.nu\"); ^ghosty term init nu | save --force $init; source $init\n\n\
+                      Uso:\n  \
+                        ghosty term run \"lista los archivos de este directorio\"\n  \
+                        @ghosty \"crea un script de python\"  # con el alias\n  \
+                        @g \"pregunta rápida\"  # alias corto"
     )]
     Term {
         #[command(subcommand)]
@@ -964,13 +962,13 @@ enum Command {
 
     /// Generate completions for various shells
     #[command(
-        about = "Generate the autocompletion script or Nushell module for the specified shell"
+        about = "Genera el script de autocompletado o el módulo de Nushell para el shell indicado"
     )]
     Completion {
         #[arg(value_enum)]
         shell: CompletionShell,
 
-        #[arg(long, default_value = "goose", help = "Provide a custom binary name")]
+        #[arg(long, default_value = "ghosty", help = "Nombre del binario")]
         bin_name: String,
     },
 
@@ -979,8 +977,8 @@ enum Command {
     /// Discovers `**/.agents/checks/*.md` subagent reviewers and
     /// `**/.agents/REVIEW.md` scoped prompt overrides, builds a review
     /// request from the working tree (or an explicit diff range), and
-    /// runs the review through goose.
-    #[command(about = "Review the current diff using goose")]
+    /// runs the review through ghosty.
+    #[command(about = "Revisa el diff actual con ghosty")]
     Review {
         /// Diff range to review (e.g. "main...HEAD"). Defaults to the working
         /// tree vs HEAD.
@@ -1075,27 +1073,27 @@ enum Command {
     },
     #[command(
         name = "validate-extensions",
-        about = "Validate a bundled-extensions.json file",
+        about = "Valida un archivo bundled-extensions.json",
         hide = true
     )]
     ValidateExtensions {
-        #[arg(help = "Path to the bundled-extensions.json file")]
+        #[arg(help = "Ruta al archivo bundled-extensions.json")]
         file: PathBuf,
     },
 
     #[command(
         name = "mcp-probe",
-        about = "Start a Goose MCP session without an LLM and inspect a stdio MCP server",
+        about = "Inspecciona un servidor MCP stdio sin usar un LLM",
         hide = true
     )]
     McpProbe {
-        #[arg(help = "Stdio MCP server command to inspect")]
+        #[arg(help = "Comando del servidor MCP stdio a inspeccionar")]
         extension: String,
 
         #[arg(
             long,
             value_name = "PATH|-",
-            help = "JSON probe script; use - for stdin"
+            help = "Script JSON de sondeo; usa - para stdin"
         )]
         script: Option<String>,
     },
@@ -1105,39 +1103,39 @@ enum Command {
 enum TermCommand {
     /// Print shell initialization script
     #[command(
-        about = "Print shell initialization script",
-        long_about = "Prints shell configuration to set up terminal-integrated sessions.\n\
-                      Each terminal gets a persistent goose session that automatically resumes.\n\n\
-                      Setup:\n  \
-                        echo 'eval \"$(goose term init zsh)\"' >> ~/.zshrc\n  \
+        about = "Imprime el script de inicialización del shell",
+        long_about = "Imprime la configuración de shell para las sesiones integradas a la terminal.\n\
+                      Cada terminal tiene una sesión persistente de ghosty que se reanuda sola.\n\n\
+                      Instalación:\n  \
+                        echo 'eval \"$(ghosty term init zsh)\"' >> ~/.zshrc\n  \
                         source ~/.zshrc\n\n\
                         Nushell:\n  \
-                        let init = ($nu.cache-dir | path join \"goose-term-init.nu\")\n  \
-                        ^goose term init nu | save --force $init\n  \
+                        let init = ($nu.cache-dir | path join \"ghosty-term-init.nu\")\n  \
+                        ^ghosty term init nu | save --force $init\n  \
                         source $init\n\n\
-                      With --default (anything typed that isn't a command goes to goose):\n  \
-                        echo 'eval \"$(goose term init zsh --default)\"' >> ~/.zshrc\n  \
-                        ^goose term init nu --default | save --force $init"
+                      Con --default (todo lo que no sea un comando va a ghosty):\n  \
+                        echo 'eval \"$(ghosty term init zsh --default)\"' >> ~/.zshrc\n  \
+                        ^ghosty term init nu --default | save --force $init"
     )]
     Init {
         /// Shell type (bash, zsh, fish, nu, powershell)
         #[arg(value_enum)]
         shell: Shell,
 
-        #[arg(short, long, help = "Name for the terminal session")]
+        #[arg(short, long, help = "Nombre de la sesión de terminal")]
         name: Option<String>,
 
-        /// Make goose the default handler for unknown commands
+        /// Hace a ghosty el manejador por defecto de comandos desconocidos
         #[arg(
             long = "default",
-            help = "Make goose the default handler for unknown commands",
-            long_help = "When enabled, anything you type that isn't a valid command will be sent to goose. Supported for zsh, bash, and nu."
+            help = "Hace a ghosty el manejador por defecto de comandos desconocidos",
+            long_help = "Todo lo que escribas que no sea un comando válido se manda a ghosty. Soportado en zsh, bash y nu."
         )]
         default: bool,
     },
 
     /// Log a shell command (called by shell hook)
-    #[command(about = "Log a shell command to the session", hide = true)]
+    #[command(about = "Registra un comando de shell en la sesión", hide = true)]
     Log {
         /// The command that was executed
         command: String,
@@ -1145,12 +1143,12 @@ enum TermCommand {
 
     /// Run a prompt in the terminal session
     #[command(
-        about = "Run a prompt in the terminal session",
-        long_about = "Run a prompt in the terminal-integrated session.\n\n\
-                      Examples:\n  \
-                        goose term run list files in this directory\n  \
-                        @goose list files  # using alias\n  \
-                        @g why did that fail  # short alias"
+        about = "Manda un prompt a la sesión de terminal",
+        long_about = "Manda un prompt a la sesión integrada a la terminal.\n\n\
+                      Ejemplos:\n  \
+                        ghosty term run lista los archivos de este directorio\n  \
+                        @ghosty lista archivos  # con el alias\n  \
+                        @g por qué falló eso  # alias corto"
     )]
     Run {
         /// The prompt to send to goose (multiple words allowed without quotes)
@@ -1160,9 +1158,9 @@ enum TermCommand {
 
     /// Print session info for prompt integration
     #[command(
-        about = "Print session info for prompt integration",
-        long_about = "Prints compact session info (token usage, model) for shell prompt integration.\n\
-                      Example output: ●○○○○ sonnet"
+        about = "Imprime info compacta de la sesión para el prompt del shell",
+        long_about = "Imprime info compacta de la sesión (tokens, modelo) para integrarla al prompt del shell.\n\
+                      Ejemplo de salida: ●○○○○ sonnet"
     )]
     Info,
 }
@@ -1445,9 +1443,10 @@ async fn handle_mcp_command(server: McpCommand) -> Result<()> {
 }
 
 struct ServeCommandArgs {
-    host: String,
-
-    port: u16,
+    host: Option<String>,
+    port: Option<u16>,
+    setup: bool,
+    check: bool,
     tls: bool,
     tls_cert_path: Option<String>,
     tls_key_path: Option<String>,
@@ -1471,6 +1470,8 @@ async fn handle_serve_command(args: ServeCommandArgs) -> Result<()> {
     let ServeCommandArgs {
         host,
         port,
+        setup,
+        check,
         tls,
         tls_cert_path,
         tls_key_path,
@@ -1481,6 +1482,31 @@ async fn handle_serve_command(args: ServeCommandArgs) -> Result<()> {
         enable_scheduler,
     } = args;
 
+    if setup {
+        return crate::commands::serve_setup::run_serve_setup().await;
+    }
+    if check {
+        let ok = crate::commands::serve_setup::run_serve_check()?;
+        if !ok {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    // Flag > config guardada (`ghosty serve --setup`) > default.
+    let saved = crate::commands::serve_setup::ServeSettings::load(Config::global());
+    let host = host.unwrap_or(saved.host);
+    let port = port.unwrap_or(saved.port);
+    let builtins = if builtins.is_empty() {
+        saved.builtins
+    } else {
+        builtins
+    };
+    let allowed_origins = if allowed_origins.is_empty() {
+        saved.allowed_origins
+    } else {
+        allowed_origins
+    };
     let builtins = AcpBuiltinSelection::from_requested(builtins);
 
     let additional_source_roots = Config::global()
@@ -1504,36 +1530,36 @@ async fn handle_serve_command(args: ServeCommandArgs) -> Result<()> {
         session_cwd: None,
         enable_scheduler,
     }));
+    // La variable de entorno gana; si no está, el secreto guardado por `--setup`.
     let env_secret = std::env::var(GHOSTY_SERVER_TOKEN_ENV)
         .ok()
         .map(|secret| secret.trim().to_string())
-        .filter(|secret| !secret.is_empty());
+        .filter(|secret| !secret.is_empty())
+        .or(saved.token);
     let require_token = env_secret.is_some();
     if !require_token && !dangerously_unauthenticated {
         anyhow::bail!(
-            "{GHOSTY_SERVER_TOKEN_ENV} must be set to start `goose serve`; pass --dangerously-unauthenticated to run without ACP authentication"
+            "Falta {GHOSTY_SERVER_TOKEN_ENV} para arrancar `ghosty serve`. Corre `ghosty serve --setup`, o pasa --dangerously-unauthenticated para correr sin autenticación ACP"
         );
     }
     if dangerously_unauthenticated && !require_token {
         warn!(
-            "{GHOSTY_SERVER_TOKEN_ENV} is not set and --dangerously-unauthenticated was passed; the ACP endpoint will accept unauthenticated connections"
+            "{GHOSTY_SERVER_TOKEN_ENV} no está y se pasó --dangerously-unauthenticated; el endpoint ACP aceptará conexiones sin autenticar"
         );
     }
     let additional_allowed_origins = allowed_origins
-        .into_iter()
+        .iter()
         .map(|origin| {
-            let origin = origin.trim();
-            if origin.is_empty() || origin == "*" {
-                anyhow::bail!("--allowed-origin must be a non-wildcard Origin value");
-            }
-            HeaderValue::from_str(origin).map_err(|error| {
-                anyhow::anyhow!("invalid --allowed-origin value `{origin}`: {error}")
+            let origin = crate::commands::serve_setup::validate_origin(origin)
+                .map_err(|e| anyhow::anyhow!("--allowed-origin `{origin}`: {e}"))?;
+            HeaderValue::from_str(&origin).map_err(|error| {
+                anyhow::anyhow!("valor inválido de --allowed-origin `{origin}`: {error}")
             })
         })
         .collect::<Result<Vec<_>>>()?;
     let secret_key = env_secret.unwrap_or_else(generate_serve_secret_key);
     if let Err(error) = server.start_scheduler().await {
-        warn!("Scheduler failed to start; scheduled jobs will not run until a client connects: {error}");
+        warn!("El scheduler no arrancó; los trabajos programados no correrán hasta que un cliente se conecte: {error}");
     }
     let router = create_router(
         server,
@@ -1562,6 +1588,7 @@ async fn handle_serve_command(args: ServeCommandArgs) -> Result<()> {
             )
             .await?;
             info!("Starting ACP server on https://{}", addr);
+            crate::commands::serve_setup::print_connect_block(&host, port, None, &allowed_origins);
 
             axum_server::bind_rustls(addr, tls_setup.config)
                 .serve(router.into_make_service_with_connect_info::<SocketAddr>())
@@ -1579,6 +1606,7 @@ async fn handle_serve_command(args: ServeCommandArgs) -> Result<()> {
     } else {
         info!("Starting ACP server on http://{}", addr);
         let listener = tokio::net::TcpListener::bind(addr).await?;
+        crate::commands::serve_setup::print_connect_block(&host, port, None, &allowed_origins);
         axum::serve(
             listener,
             router.into_make_service_with_connect_info::<SocketAddr>(),
@@ -1837,7 +1865,7 @@ fn parse_run_input(
         (Some(file), _, _) => {
             let contents = std::fs::read_to_string(file).unwrap_or_else(|err| {
                 eprintln!(
-                    "Instruction file not found — did you mean to use goose run --text?\n{}",
+                    "No se encontró el archivo de instrucciones. ¿Querías `ghosty run --text`?\n{}",
                     err
                 );
                 std::process::exit(1);
@@ -2124,6 +2152,8 @@ pub async fn cli() -> anyhow::Result<()> {
         Some(Command::Serve {
             host,
             port,
+            setup,
+            check,
             tls,
             tls_cert_path,
             tls_key_path,
@@ -2136,6 +2166,8 @@ pub async fn cli() -> anyhow::Result<()> {
             handle_serve_command(ServeCommandArgs {
                 host,
                 port,
+                setup,
+                check,
                 tls,
                 tls_cert_path,
                 tls_key_path,
@@ -2352,8 +2384,8 @@ mod tests {
         init.write_long_help(&mut buffer).expect("write help");
 
         let help = String::from_utf8(buffer).expect("utf8");
-        assert!(help.contains("goose term init nu"));
-        assert!(help.contains("Supported for zsh, bash, and nu"));
+        assert!(help.contains("ghosty term init nu"));
+        assert!(help.contains("Soportado en zsh, bash y nu"));
     }
 
     #[test]
