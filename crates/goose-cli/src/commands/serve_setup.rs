@@ -6,7 +6,7 @@
 //! donde `serve` los lee, más el bloque que dice cómo conectarse.
 
 use anyhow::Result;
-use cliclack::{confirm, input, intro, multiselect, outro, select};
+use cliclack::{input, intro, multiselect, outro, select};
 use console::style;
 use goose::config::Config;
 
@@ -159,7 +159,7 @@ pub async fn run_serve_setup() -> Result<()> {
     )?;
     let mut origins: Vec<String> = current.allowed_origins.clone();
     if !origins.is_empty() {
-        let keep = confirm(format!(
+        let keep = crate::commands::confirm_es(format!(
             "Orígenes guardados: {}. ¿Conservarlos?",
             origins.join(", ")
         ))
@@ -175,9 +175,10 @@ pub async fn run_serve_setup() -> Result<()> {
         } else {
             origins.join(", ")
         };
-        let add = confirm(format!("Orígenes permitidos: {shown}. ¿Agregar uno?"))
-            .initial_value(false)
-            .interact()?;
+        let add =
+            crate::commands::confirm_es(format!("Orígenes permitidos: {shown}. ¿Agregar uno?"))
+                .initial_value(false)
+                .interact()?;
         if !add {
             break;
         }

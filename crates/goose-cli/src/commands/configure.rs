@@ -188,7 +188,7 @@ fn telemetry_consent_dialog() -> anyhow::Result<()> {
         println!("  {}", style(line).dim());
     }
     println!();
-    let consent = cliclack::confirm("¿Compartir estos conteos anónimos?")
+    let consent = crate::commands::confirm_es("¿Compartir estos conteos anónimos?")
         .initial_value(true)
         .interact()?;
     config.set_param(TELEMETRY_KEY, consent)?;
@@ -209,7 +209,7 @@ fn configure_telemetry_dialog() -> anyhow::Result<()> {
         ghosty_telemetry::notice::NOTICE_HEADLINE,
         ghosty_telemetry::notice::NOTICE_BODY
     ));
-    let consent = cliclack::confirm("¿Compartir estos conteos anónimos?")
+    let consent = crate::commands::confirm_es("¿Compartir estos conteos anónimos?")
         .initial_value(current)
         .interact()?;
     config.set_param(TELEMETRY_KEY, consent)?;
@@ -252,7 +252,7 @@ async fn handle_first_time_setup(config: &Config) -> anyhow::Result<()> {
     handle_manual_provider_setup(config, preselected).await;
 
     if config.exists() {
-        let setup_serve = cliclack::confirm("¿Dejar listo `ghosty serve` ahora?")
+        let setup_serve = crate::commands::confirm_es("¿Dejar listo `ghosty serve` ahora?")
             .initial_value(false)
             .interact()?;
         if setup_serve {
@@ -298,11 +298,12 @@ fn offer_easybits_mcp(config: &Config) {
     let Ok(key) = config.get_secret::<String>("EASYBITS_API_KEY") else {
         return;
     };
-    let wants =
-        cliclack::confirm("¿Activar también el MCP de easybits (archivos, imágenes, documentos)?")
-            .initial_value(true)
-            .interact()
-            .unwrap_or(false);
+    let wants = crate::commands::confirm_es(
+        "¿Activar también el MCP de easybits (archivos, imágenes, documentos)?",
+    )
+    .initial_value(true)
+    .interact()
+    .unwrap_or(false);
     if !wants {
         return;
     }
@@ -700,7 +701,7 @@ async fn configure_single_key(
     match from_env {
         Some(env_value) => {
             let _ = cliclack::log::info(format!("{} viene de una variable de entorno", key.name));
-            if cliclack::confirm("¿Guardar este valor en tu llavero?")
+            if crate::commands::confirm_es("¿Guardar este valor en tu llavero?")
                 .initial_value(true)
                 .interact()?
             {
@@ -724,7 +725,7 @@ async fn configure_single_key(
             match existing {
                 Ok(_) => {
                     let _ = cliclack::log::info(format!("{} ya está configurado", key.name));
-                    if cliclack::confirm("¿Actualizar este valor?").interact()? {
+                    if crate::commands::confirm_es("¿Actualizar este valor?").interact()? {
                         if key.oauth_flow {
                             handle_oauth_configuration(provider_name, &key.name).await?;
                         } else {
@@ -755,9 +756,12 @@ async fn configure_single_key(
                     if key.oauth_flow {
                         handle_oauth_configuration(provider_name, &key.name).await?;
                     } else if !key.required && key.secret {
-                        if cliclack::confirm(format!("¿Quieres poner {}? (opcional)", key.name))
-                            .initial_value(true)
-                            .interact()?
+                        if crate::commands::confirm_es(format!(
+                            "¿Quieres poner {}? (opcional)",
+                            key.name
+                        ))
+                        .initial_value(true)
+                        .interact()?
                         {
                             let value: String =
                                 cliclack::password(format!("Valor de {}", key.name))
@@ -930,7 +934,7 @@ pub async fn configure_provider_dialog_for(preselected: Option<&str>) -> anyhow:
         .filter(|k| !k.primary && !k.oauth_flow)
         .collect();
     if !non_primary_keys.is_empty()
-        && cliclack::confirm("¿Configurar ajustes avanzados?")
+        && crate::commands::confirm_es("¿Configurar ajustes avanzados?")
             .initial_value(false)
             .interact()?
     {
@@ -1122,7 +1126,7 @@ fn collect_env_vars() -> anyhow::Result<(HashMap<String, String>, Vec<String>)> 
     let mut env_keys = Vec::new();
     let config = Config::global();
 
-    if !cliclack::confirm("¿Agregar variables de entorno?").interact()? {
+    if !crate::commands::confirm_es("¿Agregar variables de entorno?").interact()? {
         return Ok((envs, env_keys));
     }
 
@@ -1140,7 +1144,7 @@ fn collect_env_vars() -> anyhow::Result<(HashMap<String, String>, Vec<String>)> 
         }
         env_keys.push(key);
 
-        if !cliclack::confirm("¿Otra variable de entorno?").interact()? {
+        if !crate::commands::confirm_es("¿Otra variable de entorno?").interact()? {
             break;
         }
     }
@@ -1151,7 +1155,7 @@ fn collect_env_vars() -> anyhow::Result<(HashMap<String, String>, Vec<String>)> 
 fn collect_headers() -> anyhow::Result<HashMap<String, String>> {
     let mut headers = HashMap::new();
 
-    if !cliclack::confirm("¿Agregar headers personalizados?").interact()? {
+    if !crate::commands::confirm_es("¿Agregar headers personalizados?").interact()? {
         return Ok(headers);
     }
 
@@ -1166,7 +1170,7 @@ fn collect_headers() -> anyhow::Result<HashMap<String, String>> {
 
         headers.insert(key, value);
 
-        if !cliclack::confirm("¿Otro header?").interact()? {
+        if !crate::commands::confirm_es("¿Otro header?").interact()? {
             break;
         }
     }
@@ -1868,9 +1872,10 @@ pub fn configure_max_turns_dialog() -> anyhow::Result<()> {
 
 /// Prompts the user to collect custom HTTP headers for a provider.
 fn collect_custom_headers() -> anyhow::Result<Option<std::collections::HashMap<String, String>>> {
-    let use_custom_headers = cliclack::confirm("¿Este proveedor necesita headers personalizados?")
-        .initial_value(false)
-        .interact()?;
+    let use_custom_headers =
+        crate::commands::confirm_es("¿Este proveedor necesita headers personalizados?")
+            .initial_value(false)
+            .interact()?;
 
     if !use_custom_headers {
         return Ok(None);
@@ -1894,7 +1899,7 @@ fn collect_custom_headers() -> anyhow::Result<Option<std::collections::HashMap<S
 
         custom_headers.insert(header_name, header_value);
 
-        let add_more = cliclack::confirm("¿Otro header?")
+        let add_more = crate::commands::confirm_es("¿Otro header?")
             .initial_value(false)
             .interact()?;
 
@@ -1952,7 +1957,7 @@ fn add_provider() -> anyhow::Result<()> {
         })
         .interact()?;
 
-    let requires_auth = cliclack::confirm("¿Este proveedor pide autenticación?")
+    let requires_auth = crate::commands::confirm_es("¿Este proveedor pide autenticación?")
         .initial_value(true)
         .interact()?;
 
@@ -1979,9 +1984,10 @@ fn add_provider() -> anyhow::Result<()> {
         .filter(|s| !s.is_empty())
         .collect();
 
-    let supports_streaming = cliclack::confirm("¿Este proveedor soporta respuestas en streaming?")
-        .initial_value(true)
-        .interact()?;
+    let supports_streaming =
+        crate::commands::confirm_es("¿Este proveedor soporta respuestas en streaming?")
+            .initial_value(true)
+            .interact()?;
 
     let base_path_input: String =
         cliclack::input("Ruta base de la API (opcional, Enter para saltar):")
