@@ -1,11 +1,6 @@
 <div align="center">
 
-```
-    ˚
-  ▄████▄      ● nueva sesión · easybits deepseek-v4-flash
- ▐ ◐  ◐ ▌     20260901_1 · ~/mi-proyecto
- ▐█▀██▀█▌     ghosty está listo
-```
+<img src="assets/banner.png" width="620" alt="ghosty está listo">
 
 # ghosty-lite
 
