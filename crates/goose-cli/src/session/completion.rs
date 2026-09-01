@@ -532,7 +532,7 @@ impl Hinter for GooseCompleter {
                 Some("Interrumpido. ¿En qué debería trabajar Ghosty en su lugar?".to_string())
             }
             HintStatus::MaybeExit => {
-                Some("Press Ctrl+C again to exit, or type new instructions to continue".to_string())
+                Some("Ctrl+C otra vez para salir, o escribe nuevas instrucciones para seguir".to_string())
             }
             HintStatus::Default => {
                 let newline_key = super::input::get_newline_key().to_ascii_uppercase();
