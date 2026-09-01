@@ -1632,6 +1632,10 @@ impl SessionStorage {
             .await?;
 
         tx.commit().await?;
+        crate::telemetry::emit_session_started(match session_type {
+            SessionType::User => crate::telemetry::SessionSource::Interactive,
+            _ => crate::telemetry::SessionSource::Api,
+        });
         Ok(session)
     }
 

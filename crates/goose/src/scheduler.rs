@@ -397,6 +397,7 @@ impl Scheduler {
                     Ok(_) => tracing::info!("Job '{}' completed", task_job_id),
                     Err(ref e) => {
                         tracing::error!("Job '{}' failed: {}", task_job_id, e);
+                        crate::telemetry::emit_error("scheduler_job_failed", "");
                     }
                 }
             })
@@ -1092,6 +1093,7 @@ async fn execute_job(
         interface = "scheduler",
         "Recipe execution started"
     );
+    crate::telemetry::emit_workflow_run();
 
     let prompt_text = recipe
         .prompt

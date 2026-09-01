@@ -233,6 +233,8 @@ impl Operation<Session, GooseEffect> for RecipeOperation {
             }
         }
 
+        crate::telemetry::emit_workflow_run();
+
         let command_message = messages_since_kickoff(conversation)?
             .first()
             .ok_or_else(|| anyhow!("recipe command conversation has no kickoff message"))?;

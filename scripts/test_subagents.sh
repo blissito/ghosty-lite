@@ -11,7 +11,7 @@
 # Knobs:
 #   GHOSTY_PROVIDER (default: anthropic)
 #   GHOSTY_MODEL    (default: claude-haiku-4-5)
-#   SKIP_BUILD     skip cargo build (assumes target/debug/goose already exists)
+#   SKIP_BUILD     skip cargo build (assumes target/debug/ghosty already exists)
 #   KEEP_TESTDIR   don't rm the temp workdir on exit (for debugging)
 #
 # Agent names are deliberately weird ("janpier", "peterjoris") so that they
@@ -29,7 +29,7 @@ fi
 
 if [ -z "$SKIP_BUILD" ]; then
   echo "Building goose..."
-  cargo build --bin goose
+  cargo build --bin ghosty
   echo ""
 else
   echo "Skipping build (SKIP_BUILD is set)..."
@@ -37,7 +37,7 @@ else
 fi
 
 SCRIPT_DIR=$(pwd)
-GHOSTY_BIN="$SCRIPT_DIR/target/debug/goose"
+GHOSTY_BIN="$SCRIPT_DIR/target/debug/ghosty"
 export PATH="$SCRIPT_DIR/target/debug:$PATH"
 
 export GHOSTY_PROVIDER="${GHOSTY_PROVIDER:-anthropic}"

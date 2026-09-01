@@ -9,7 +9,8 @@ repository.workspace = true
 description.workspace = true
 
 [features]
-default = []
+default = ["telemetry"]
+telemetry = ["dep:ghosty-telemetry"]
 otel = [
     "dep:tracing-opentelemetry",
     "dep:opentelemetry",
@@ -49,6 +50,7 @@ system-keyring = ["dep:keyring"]
 workspace = true
 
 [dependencies]
+ghosty-telemetry = { path = "../ghosty-telemetry", optional = true }
 lru = { workspace = true }
 rmcp = { workspace = true, features = [
     "client",

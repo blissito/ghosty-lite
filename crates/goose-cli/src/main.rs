@@ -31,9 +31,31 @@ async fn run() -> Result<()> {
     result
 }
 
+/// Registra el pánico en la telemetría (sólo el sitio reducido, nunca el
+/// mensaje) y luego deja correr el hook por defecto. Se instala antes de
+/// parsear argv: mientras la telemetría no está armada, esto es un no-op.
+fn install_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let site = info
+            .location()
+            .map(|loc| goose::telemetry::reduce_panic_site(loc.file(), loc.line(), loc.column()))
+            .unwrap_or_default();
+        goose::telemetry::emit_panic(site);
+        default_hook(info);
+    }));
+}
+
 fn main() -> Result<()> {
     #[cfg(windows)]
     enable_windows_vt_processing();
+
+    install_panic_hook();
+    // La superficie sale de argv[1]: REPL → Tui, `serve` → Serve, `run` →
+    // Exec, lo demás → Cli. `serve` no pregunta nunca; sigue el default
+    // documentado y los kill switches.
+    let args: Vec<String> = std::env::args().collect();
+    goose::telemetry::arm_from_args(&args);
 
     let handle = std::thread::Builder::new()
         .name("goose-cli-main".to_string())
@@ -47,7 +69,11 @@ fn main() -> Result<()> {
         })
         .map_err(|e| anyhow::anyhow!("Failed to spawn goose-cli main thread: {}", e))?;
 
-    handle
+    let result = handle
         .join()
-        .map_err(|_| anyhow::anyhow!("goose-cli main thread panicked"))?
+        .map_err(|_| anyhow::anyhow!("goose-cli main thread panicked"));
+    // Cierre acotado: session_end + flush con timeout. Nunca bloquea la salida
+    // más allá de los topes del crate.
+    goose::telemetry::shutdown();
+    result?
 }

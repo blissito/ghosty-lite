@@ -256,6 +256,7 @@ impl Operation<Session, GooseEffect> for RetryOperation<'_> {
                     retry_config.max_retries
                 ),
             );
+            crate::telemetry::emit_error("retry_max_exceeded", "");
             let message = emit.message(message).await;
             return applied([message.into()]);
         }

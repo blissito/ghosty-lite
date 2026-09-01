@@ -131,6 +131,7 @@ impl RetryManager {
                 "Maximum retry attempts ({}) exceeded",
                 retry_config.max_retries
             );
+            crate::telemetry::emit_error("retry_max_exceeded", "");
             return Ok(RetryResult::MaxAttemptsReached(error_msg));
         }
 

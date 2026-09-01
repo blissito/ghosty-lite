@@ -1293,7 +1293,11 @@ impl Agent {
                     cancellation_token.unwrap_or_default(),
                 )
                 .await;
-            result.unwrap_or_else(|error_data| ToolCallResult::from(Err(error_data)))
+            crate::telemetry::emit_tool_call();
+            result.unwrap_or_else(|error_data| {
+                crate::telemetry::emit_error("tool_execution_failed", &error_data.message);
+                ToolCallResult::from(Err(error_data))
+            })
         };
 
         debug!("WAITING_TOOL_END: {}", tool_call.name);
@@ -2288,6 +2292,7 @@ impl Agent {
 
         let provider = self.provider().await?;
         let provider_name = provider.get_name().to_string();
+        crate::telemetry::record_provider(&provider_name);
         let saved_provider_session_id =
             super::latest_provider_session_id(conversation.messages(), &provider_name);
         if let Some(saved_provider_session_id) = saved_provider_session_id {
@@ -2404,6 +2409,7 @@ impl Agent {
             let stop_hook_block_cap = self.stop_hook_block_cap();
             let mut can_drain_pending_steers = false;
             let turn_start = chrono::Local::now();
+            let turn_clock = std::time::Instant::now();
             let turn_start_compaction_info =
                 super::moim::compute_compaction_info(&session_config.id, &self.extension_manager)
                     .await;
@@ -2590,6 +2596,7 @@ impl Agent {
                     match next {
                         Ok((response, usage)) => {
                             compaction_attempts = 0;
+                            crate::telemetry::emit_turn(turn_clock.elapsed().as_secs());
 
                             if let Some(ref usage) = usage {
                                 let enriched = self.update_session_metrics(&session_config.id, session_config.schedule_id.clone(), usage, None).await?;
@@ -3070,6 +3077,7 @@ impl Agent {
                         #[allow(unused_variables)]
                         Err(ref provider_err @ ProviderError::ContextLengthExceeded(_)) => {
                             provider_errored = true;
+                            crate::telemetry::emit_error(provider_err.telemetry_type(), "");
                             compaction_attempts += 1;
 
                             if compaction_attempts >= 2 {
@@ -3114,6 +3122,7 @@ impl Agent {
                                     break;
                                 }
                                 Err(e) => {
+                                    crate::telemetry::emit_error("compaction_failed", "");
                                     error!("Compaction failed: {}", e);
                                     yield AgentEvent::Message(
                                         Message::assistant().with_text(
@@ -3126,6 +3135,7 @@ impl Agent {
                         }
                         Err(ref provider_err @ ProviderError::CreditsExhausted { details: _, ref top_up_url }) => {
                             provider_errored = true;
+                            crate::telemetry::emit_error(provider_err.telemetry_type(), "");
                             error!("Error: {}", provider_err);
 
                             let user_msg = if top_up_url.is_some() {
@@ -3149,6 +3159,7 @@ impl Agent {
                         }
                         Err(ref provider_err @ ProviderError::Refusal { ref details, ref category }) => {
                             provider_errored = true;
+                            crate::telemetry::emit_error(provider_err.telemetry_type(), "");
                             error!("Error: {}", provider_err);
 
                             let category = category.as_deref().map(|c| format!("\n\nCategory: {c}")).unwrap_or_default();
@@ -3163,6 +3174,7 @@ impl Agent {
                         }
                         Err(ref provider_err @ ProviderError::Authentication(_)) => {
                             provider_errored = true;
+                            crate::telemetry::emit_error(provider_err.telemetry_type(), "");
                             error!("Error: {}", provider_err);
                             let message = persist_and_push_message_with_id(
                                 &session_manager,
@@ -3176,6 +3188,7 @@ impl Agent {
                         }
                         Err(ref provider_err @ ProviderError::NetworkError(_)) => {
                             provider_errored = true;
+                            crate::telemetry::emit_error(provider_err.telemetry_type(), "");
                             error!("Error: {}", provider_err);
                             yield AgentEvent::Message(
                                 Message::assistant().with_text(
@@ -3186,6 +3199,7 @@ impl Agent {
                         }
                         Err(ref provider_err) => {
                             provider_errored = true;
+                            crate::telemetry::emit_error(provider_err.telemetry_type(), "");
                             error!("Error: {}", provider_err);
                             yield AgentEvent::Message(
                                 Message::assistant().with_text(

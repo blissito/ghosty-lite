@@ -1,5 +1,7 @@
-[target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-args=/FORCE:MULTIPLE /STACK:8388608"]
+# Los builds de desarrollo de este workspace llegaron a 37 GB con incremental
+# y debuginfo completo. Sin incremental y con sólo tablas de líneas caben.
+[build]
+incremental = false
 
-[target.aarch64-pc-windows-msvc]
-rustflags = ["-C", "link-args=/FORCE:MULTIPLE /STACK:8388608"]
+[profile.dev]
+debug = "line-tables-only"
