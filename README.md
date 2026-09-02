@@ -133,6 +133,7 @@ variable de entorno con el mismo nombre, y el entorno gana:
 | `GHOSTY_SERVE_HOST`, `GHOSTY_SERVE_PORT`, `GHOSTY_SERVE_ALLOWED_ORIGINS` | lo que guarda `serve --setup` |
 | `GHOSTY_DISABLE_KEYRING` | secretos en archivo, no en el keyring (contenedores) |
 | `GHOSTY_DISABLE_SESSION_NAMING` | sin la llamada extra que titula la sesión |
+| `GHOSTY_TELEMETRY_ENDPOINT` | a dónde se manda la telemetría; sin esto queda inerte |
 | `GHOSTY_TELEMETRY=0` | apaga la telemetría en esta ejecución |
 
 Las variables `GOOSE_*` de una instalación de goose se siguen leyendo, y un `config.yaml`
@@ -140,10 +141,11 @@ de goose se migra solo.
 
 ## Telemetría
 
-Cuenta versión, sistema, duración y desenlace de la sesión, y contadores de uso y de
-errores. Nunca conversaciones, código, prompts, archivos ni credenciales. Lo dice al primer
-arranque y se apaga con `GHOSTY_TELEMETRY=0` o desde `ghosty configure` → Ajustes →
-Telemetría. Esquema completo en `crates/ghosty-telemetry/docs/TELEMETRY.md`.
+**Inerte hasta que se configura un endpoint**: el binario no trae ningún host horneado.
+Con `GHOSTY_TELEMETRY_ENDPOINT` puesto, cuenta versión, sistema, duración y desenlace de
+la sesión, y contadores de uso y de errores. Nunca conversaciones, código, prompts,
+archivos ni credenciales. Se apaga con `GHOSTY_TELEMETRY=0` o desde `ghosty configure` →
+Ajustes → Telemetría. Esquema completo en `crates/ghosty-telemetry/docs/TELEMETRY.md`.
 
 ## Qué se quitó y por qué
 

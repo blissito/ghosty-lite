@@ -810,7 +810,7 @@ mod tests {
             .unwrap();
 
         assert!(working_dir
-            .join(".ghosty/memory/project notes_2026.txt")
+            .join(".goose/memory/project notes_2026.txt")
             .is_file());
     }
 

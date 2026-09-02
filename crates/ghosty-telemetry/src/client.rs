@@ -1,6 +1,6 @@
 //! Transport. One POST, or — with no endpoint — a local file.
 //!
-//! The shipped default endpoint is [`crate::decision::DEFAULT_ENDPOINT`],
+//! There is no shipped default endpoint: the host configures one,
 //! the first-party ingest service documented in `docs/TELEMETRY.md`. That
 //! default decides only *where* a batch goes, never *whether* one exists: this
 //! module is reached only by a session that resolved telemetry on after every

@@ -24,13 +24,6 @@ use crate::event::Surface;
 /// Directory name under `$GHOSTY_HOME` that holds every telemetry file.
 pub const TELEMETRY_DIR: &str = "telemetry";
 
-/// The shipped default endpoint: the first-party ingest service.
-///
-/// This decides only *where* a batch goes, never *whether* one exists. A host
-/// that leaves `TelemetryInputs::endpoint` as `None` sends here; an explicitly
-/// empty endpoint selects the local dry-run sink instead.
-pub const DEFAULT_ENDPOINT: &str = "https://telemetry.ghosty.net/v1/telemetry";
-
 /// Everything the emit predicate needs, resolved by the host application.
 ///
 /// The host owns config parsing; this crate owns the predicate. A resolver
@@ -52,9 +45,9 @@ pub struct TelemetryInputs {
     pub explicit_off: bool,
     /// Whether the user declined the first-run notice at any version.
     pub notice_declined: bool,
-    /// The configured endpoint. `None` selects [`DEFAULT_ENDPOINT`];
-    /// `Some("")` (or whitespace) selects the local dry-run sink; anything
-    /// else must pass [`validate_endpoint`].
+    /// The configured endpoint. `None` (nothing configured) leaves telemetry
+    /// inert: no default host is shipped. `Some("")` (or whitespace) selects
+    /// the local dry-run sink; anything else must pass [`validate_endpoint`].
     pub endpoint: Option<String>,
     /// The config file this process was launched with, if any. Informational:
     /// the resolver, not this path, is what gets re-read.
@@ -260,7 +253,7 @@ fn is_loopback_host(host: Option<&str>) -> bool {
 /// 2. Any recorded notice decline → `OptedOut`, including a decline recorded
 ///    by the former opt-in notice.
 /// 3. No resolvable home → `ForcedOff`.
-/// 4. Endpoint configured but refused by [`validate_endpoint`] → `ForcedOff`.
+/// 4. No endpoint configured, or one refused by [`validate_endpoint`] → `ForcedOff`.
 /// 5. Otherwise `Enabled`, and the consent carries the resolver so later
 ///    re-checks run the same one.
 ///
@@ -316,11 +309,15 @@ fn evaluate(inputs: &TelemetryInputs) -> TelemetryEvaluation {
         return TelemetryEvaluation::ForcedOff;
     };
 
-    // 4. A refused endpoint is a configuration error, not a user answer. An
-    //    unset endpoint is the shipped default; an explicitly empty one is the
-    //    dry-run sink.
+    // 4. Sin endpoint configurado no hay a dónde mandar nada: la telemetría
+    //    queda inerte (no se envía un default horneado a ningún host). Un
+    //    endpoint rechazado es error de configuración, no respuesta del
+    //    usuario; uno explícitamente vacío es el sink de dry-run.
     let endpoint = match inputs.endpoint.as_deref() {
-        None => Some(DEFAULT_ENDPOINT.to_string()),
+        None => {
+            tracing::debug!("sin GHOSTY_TELEMETRY_ENDPOINT; telemetría inerte");
+            return TelemetryEvaluation::ForcedOff;
+        }
         Some(raw) if raw.trim().is_empty() => None,
         Some(raw) => match validate_endpoint(raw) {
             Ok(endpoint) => Some(endpoint),

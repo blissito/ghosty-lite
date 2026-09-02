@@ -363,7 +363,7 @@ impl Connection for AcpServerConnection {
                             );
                             assert_eq!(
                                 resp.agent_info.as_ref().map(|info| info.name.as_str()),
-                                Some("goose"),
+                                Some("ghosty-lite"),
                                 "initialize response must identify the agent"
                             );
                             assert!(

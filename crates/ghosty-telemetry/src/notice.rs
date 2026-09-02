@@ -36,4 +36,5 @@ reemplaza cada 90 días. Puedes cambiar de opinión cuando quieras:
                         ghosty configure → Ajustes → Telemetría
 o, sólo para una ejecución:  GHOSTY_TELEMETRY=0
 
-Esquema completo, campo por campo:  docs/TELEMETRY.md";
+Esquema completo, campo por campo, en el repo:
+  crates/ghosty-telemetry/docs/TELEMETRY.md";

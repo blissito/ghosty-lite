@@ -685,7 +685,7 @@ pub async fn run_load_session_replays_image_attachment<C: Connection>() {
         )
         .await
         .unwrap();
-    assert!(output.text.contains("Hello Ghosty!"));
+    assert!(output.text.contains("Hello Goose!"));
     session.session_updates();
 
     let SessionData { session, .. } = conn.load_session(&session_id, vec![]).await.unwrap();
@@ -1315,7 +1315,7 @@ pub async fn run_prompt_image<C: Connection>() {
         )
         .await
         .unwrap();
-    assert_eq!(output.text, "Hello Ghosty!\nThis is a test image.");
+    assert_eq!(output.text, "Hello Goose!\nThis is a test image.");
     assert_notifications(
         &session.notifications(),
         &[
@@ -1352,7 +1352,7 @@ pub async fn run_prompt_image_attachment<C: Connection>() {
         )
         .await
         .unwrap();
-    assert!(output.text.contains("Hello Ghosty!"));
+    assert!(output.text.contains("Hello Goose!"));
     assert_notifications(&session.notifications(), &[Notification::AgentMessage]);
     expected_session_id.assert_matches(&session.session_id().0);
 }

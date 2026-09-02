@@ -60,7 +60,7 @@ pub fn buffer_path(root: &Path) -> PathBuf {
 /// `dryrun.jsonl` — where batches go when the endpoint resolves to `None`.
 ///
 /// Reached by configuring `telemetry_endpoint` empty; an unconfigured endpoint
-/// resolves to [`crate::decision::DEFAULT_ENDPOINT`] instead.
+/// resolves to the configured endpoint instead.
 #[must_use]
 pub fn dryrun_path(root: &Path) -> PathBuf {
     root.join("dryrun.jsonl")

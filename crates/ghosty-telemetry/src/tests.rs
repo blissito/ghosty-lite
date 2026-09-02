@@ -137,7 +137,7 @@ fn flush_redecision_fails_closed_when_the_resolver_cannot_read() {
 }
 
 #[test]
-fn the_default_endpoint_is_used_when_none_is_configured() {
+fn no_endpoint_configured_means_forced_off() {
     let home = temp_home();
     let resolver: Resolver = {
         let home = home.path().to_path_buf();
@@ -147,11 +147,10 @@ fn the_default_endpoint_is_used_when_none_is_configured() {
             ..TelemetryInputs::default()
         })
     };
-    let TelemetryDecision::Enabled(consent) = decide(resolver, Surface::Tui) else {
-        panic!("an unconfigured endpoint must be Enabled");
-    };
-    assert_eq!(consent.endpoint(), Some(crate::DEFAULT_ENDPOINT));
-    assert!(validate_endpoint(crate::DEFAULT_ENDPOINT).is_ok());
+    assert!(
+        matches!(decide(resolver, Surface::Tui), TelemetryDecision::ForcedOff),
+        "sin endpoint configurado la telemetría queda inerte"
+    );
 }
 
 /// One instance of every event variant, populated with the most adversarial
@@ -1683,7 +1682,7 @@ fn event_field_names_match_documented_schema() {
     // contributor is most likely to extend without touching the doc.
     let counter_rows = table_first_column(
         TELEMETRY_DOC,
-        "**`counters`** — closed field set. Every bump happens at the **call site**, never inside a conditionally-entered handler:",
+        "**`counters`** — conjunto cerrado. Cada incremento ocurre en el punto de llamada:",
     );
     assert_eq!(
         counter_rows,
@@ -1695,7 +1694,7 @@ fn event_field_names_match_documented_schema() {
     );
     let error_rows = table_first_column(
         TELEMETRY_DOC,
-        "**`errors`** — closed field set. Every value is a **variant discriminant**, never `err.to_string()`:",
+        "**`errors`** — conjunto cerrado. Cada valor es un discriminante de variante, nunca `err.to_string()`:",
     );
     assert_eq!(
         error_rows,

@@ -43,6 +43,6 @@ upstream) y el namespace de métodos ACP `_goose/unstable/*` (compatibilidad con
 - Onboarding en español: `ghosty configure` con proveedores rápidos (EasyBits, DeepSeek,
   Anthropic, OpenAI, Ollama), `ghosty serve --setup` / `--check`.
 - Provider declarativo `easybits`.
-- Telemetría propia, con aviso al primer arranque y `GHOSTY_TELEMETRY=0`.
+- Telemetría propia, inerte hasta configurar `GHOSTY_TELEMETRY_ENDPOINT`, con aviso al primer arranque y `GHOSTY_TELEMETRY=0`.
 - La mascota: un fantasma en bloques con ojos animados, portado de ghostycode.
 - `Dockerfile` para `serve` en VMs (musl estático, sin keyring).

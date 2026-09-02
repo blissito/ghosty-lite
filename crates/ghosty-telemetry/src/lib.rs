@@ -53,8 +53,8 @@ pub use actor::{BATCH_MAX_BYTES, BATCH_MAX_EVENTS, FlushOutcome};
 pub use counters::{Counter, ErrorCounter, SessionCounters};
 pub use counters::{KNOWN_PROVIDERS, canonical_provider};
 pub use decision::{
-    DEFAULT_ENDPOINT, EndpointError, Resolver, TELEMETRY_DIR, TelemetryConsent, TelemetryDecision,
-    TelemetryInputs, decide, re_decide, validate_endpoint,
+    EndpointError, Resolver, TELEMETRY_DIR, TelemetryConsent, TelemetryDecision, TelemetryInputs,
+    decide, re_decide, validate_endpoint,
 };
 pub use envelope::reduce_panic_site;
 pub use event::{

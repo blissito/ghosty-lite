@@ -7,7 +7,7 @@ pub fn manage_schedule_tool() -> Tool {
     Tool::new(
         MANAGE_SCHEDULE_TOOL_NAME.to_string(),
         indoc! {r#"
-            Manage goose's internal scheduled recipe execution.
+            Manage ghosty's internal scheduled recipe execution.
 
             Actions:
             - "list": List all goose scheduled jobs
