@@ -689,10 +689,22 @@ impl Provider for AcpProvider {
         }
 
         let previous_session_id = self.acp_session_id();
-        let loaded = self
-            .load_session(SessionId::new(session_id))
-            .await
-            .map_err(|error| ProviderError::RequestFailed(error.to_string()))?;
+        let loaded = match self.load_session(SessionId::new(session_id)).await {
+            Ok(loaded) => loaded,
+            Err(error) => {
+                // We could not restore the sub-agent's context, so the handoff memo has
+                // NOT been delivered — whatever an earlier prompt on this provider
+                // believed. Re-arm it, or the next prompt carries only the user's last
+                // message and the agent answers as if the conversation just started.
+                //
+                // This is the whole failure: `messages_to_prompt` never re-sends history
+                // (it lives inside the sub-agent), and the caller of `resume` only logs a
+                // warning. Without this line a sub-agent that lost its session is
+                // permanently amnesiac and nothing anywhere reports an error.
+                self.handoff_context_sent.store(false, Ordering::Release);
+                return Err(ProviderError::RequestFailed(error.to_string()));
+            }
+        };
         *self.session.lock().unwrap() = loaded;
         self.handoff_context_sent.store(true, Ordering::Release);
         let _ = self
@@ -2882,6 +2894,53 @@ mod tests {
         let claim = provider.claim_handoff_context(&messages);
         assert!(!claim.first_prompt);
         assert!(!claim.include_context);
+    }
+
+    /// A sub-agent that cannot restore its session must get the history back in the
+    /// handoff memo. Before this, a failed resume left `handoff_context_sent` at whatever
+    /// an earlier prompt had set it to — `true` — so the next prompt carried only the last
+    /// user message and the agent answered as if the conversation had just started. The
+    /// caller of `resume` only logs a warning, so nothing reported the loss.
+    #[tokio::test]
+    async fn failed_resume_rearms_the_handoff_memo() {
+        let (tx, mut rx) = mpsc::channel(2);
+        let (provider, _) = test_provider_with_tx(Some(tx));
+
+        // An earlier prompt on this provider already spent the one-shot.
+        provider.handoff_context_sent.store(true, Ordering::Release);
+
+        let handle = tokio::spawn(async move {
+            let result = provider.resume("saved-session").await;
+            (provider, result)
+        });
+
+        let ClientRequest::LoadSession { response_tx, .. } =
+            rx.recv().await.expect("expected session/load")
+        else {
+            panic!("expected session/load");
+        };
+        // Exactly what a sub-agent without `session/load` support answers.
+        response_tx
+            .send(Err(anyhow::anyhow!(
+                "ACP agent does not support session/load"
+            )))
+            .unwrap();
+
+        let (provider, result) = handle.await.unwrap();
+        assert!(result.is_err(), "a failed load must surface as an error");
+        assert!(
+            !provider.handoff_context_sent.load(Ordering::Acquire),
+            "a failed resume must re-arm the memo"
+        );
+
+        // And the next prompt with history actually carries it.
+        let messages = vec![
+            Message::assistant().with_text("prior answer"),
+            Message::user().with_text("current request"),
+        ];
+        let claim = provider.claim_handoff_context(&messages);
+        assert!(claim.first_prompt);
+        assert!(claim.include_context);
     }
 
     #[tokio::test]
