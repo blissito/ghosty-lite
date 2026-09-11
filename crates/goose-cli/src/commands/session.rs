@@ -168,9 +168,23 @@ pub async fn handle_session_list(
     ascending: bool,
     working_dir: Option<PathBuf>,
     limit: Option<usize>,
+    all_types: bool,
 ) -> Result<()> {
     let session_manager = SessionManager::instance();
-    let mut sessions = if let Some(limit) =
+    let mut sessions = if all_types {
+        // Todos los tipos: el filtro de `list_sessions` deja fuera las ACP, que en una
+        // caja de agente son las únicas que hay. El `limit` se aplica abajo, ya ordenado.
+        session_manager
+            .list_sessions_by_types(&[
+                SessionType::User,
+                SessionType::Scheduled,
+                SessionType::Acp,
+                SessionType::SubAgent,
+                SessionType::Gateway,
+                SessionType::Terminal,
+            ])
+            .await?
+    } else if let Some(limit) =
         session_list_limit_if_safe_to_push_down(ascending, working_dir.as_deref(), limit)
     {
         session_manager.list_sessions_with_limit(limit).await?

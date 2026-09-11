@@ -526,6 +526,12 @@ enum SessionCommand {
 
         #[arg(short = 'l', long = "limit", help = "Limita el número de resultados")]
         limit: Option<usize>,
+
+        /// Incluye TODAS las sesiones, también las ACP (las de Teams y la app). Sin esto
+        /// sólo salen las del CLI (`user`/`scheduled`), y dentro de una caja ACP eso es
+        /// una lista vacía aunque el agente lleve semanas conversando.
+        #[arg(long = "all-types", help = "Incluye las sesiones ACP, no sólo las del CLI")]
+        all_types: bool,
     },
     #[command(about = "Borra sesiones. Interactivo si no das ID, nombre ni regex.")]
     Remove {
@@ -1624,8 +1630,9 @@ async fn handle_session_subcommand(command: SessionCommand) -> Result<()> {
             ascending,
             working_dir,
             limit,
+            all_types,
         } => {
-            handle_session_list(format, ascending, working_dir, limit).await?;
+            handle_session_list(format, ascending, working_dir, limit, all_types).await?;
         }
         SessionCommand::Remove { identifier, regex } => {
             let (session_id, name) = if let Some(id) = identifier {
