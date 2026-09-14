@@ -299,6 +299,12 @@ pub struct Agent {
     pub(super) frontend_instructions: Mutex<Option<String>>,
     pub(super) prompt_manager: Mutex<PromptManager>,
     pub tool_confirmation_router: ToolConfirmationRouter,
+    /// The provider streaming the turn in flight. `self.provider` can be swapped
+    /// mid-turn (set_config_option / set_mode / a session reload recreates it), and a
+    /// harness provider keeps its pending permission requests inside the instance —
+    /// so a confirmation routed to the *current* provider found nothing
+    /// ("No task waiting for confirmation") and the tool hung forever.
+    pub(super) turn_provider: Mutex<Option<Arc<dyn Provider>>>,
     pub(super) tool_result_tx: mpsc::Sender<(String, ToolResult<CallToolResult>)>,
     pub(super) tool_result_rx: ToolResultReceiver,
 
@@ -453,6 +459,7 @@ impl Agent {
             frontend_instructions: Mutex::new(None),
             prompt_manager: Mutex::new(PromptManager::new()),
             tool_confirmation_router: ToolConfirmationRouter::new(),
+            turn_provider: Mutex::new(None),
             tool_result_tx: tool_tx,
             tool_result_rx: Arc::new(Mutex::new(tool_rx)),
             retry_manager: RetryManager::new(),
@@ -1629,8 +1636,9 @@ impl Agent {
         request_id: String,
         confirmation: PermissionConfirmation,
     ) {
-        let provider = self.provider.lock().await.clone();
-        if let Some(provider) = provider.as_ref() {
+        let current = self.provider.lock().await.clone();
+        let in_turn = self.turn_provider.lock().await.clone();
+        for provider in [current, in_turn].into_iter().flatten() {
             if provider.permission_routing() == PermissionRouting::ActionRequired
                 && provider
                     .handle_permission_confirmation(&request_id, &confirmation)
@@ -2529,6 +2537,7 @@ impl Agent {
                 }
 
                 let turn_provider = self.provider().await?;
+                *self.turn_provider.lock().await = Some(turn_provider.clone());
                 let mut stream = crate::agents::reply_parts::stream_response_from_provider(
                     turn_provider.clone(),
                     model_config.clone(),
