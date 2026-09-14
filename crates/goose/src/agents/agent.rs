@@ -2528,8 +2528,9 @@ impl Agent {
                     break;
                 }
 
+                let turn_provider = self.provider().await?;
                 let mut stream = crate::agents::reply_parts::stream_response_from_provider(
-                    self.provider().await?,
+                    turn_provider.clone(),
                     model_config.clone(),
                     &session_config.id,
                     &system_prompt,
@@ -2579,7 +2580,12 @@ impl Agent {
                     let next = if let Some(cancel_token) = &cancel_token {
                         tokio::select! {
                             biased;
-                            _ = cancel_token.cancelled() => break,
+                            _ = cancel_token.cancelled() => {
+                                // Tell a wrapped harness (ACP) to stop too; dropping the
+                                // stream alone left it running the turn to completion.
+                                turn_provider.cancel_prompt();
+                                break
+                            }
                             next = stream.next() => next,
                         }
                     } else {

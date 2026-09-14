@@ -1,5 +1,5 @@
 use agent_client_protocol::schema::v1::{
-    Annotations as AcpAnnotations, ClientCapabilities, CloseSessionRequest, ContentBlock,
+    Annotations as AcpAnnotations, CancelNotification, ClientCapabilities, CloseSessionRequest, ContentBlock,
     ContentChunk, EnvVariable, HttpHeader, ImageContent, InitializeRequest, InitializeResponse,
     LoadSessionRequest, McpCapabilities, McpServer, McpServerHttp, McpServerStdio,
     NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse, RequestPermissionOutcome,
@@ -29,7 +29,7 @@ use std::sync::{
 use std::thread::JoinHandle;
 use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command};
-use tokio::sync::{mpsc, oneshot, watch, Mutex as TokioMutex};
+use tokio::sync::{mpsc, oneshot, watch, Mutex as TokioMutex, Notify};
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
 use crate::acp::handoff::{build_handoff_context_memo, memo_token_budget, prompt_token_cost};
@@ -281,6 +281,10 @@ pub struct AcpProvider {
     pending_confirmations:
         Arc<TokioMutex<HashMap<String, oneshot::Sender<PermissionConfirmation>>>>,
     pending_tool_updates: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
+    /// Pulsed by `cancel_prompt()`: the client loop forwards it to the agent as
+    /// `session/cancel`. Without this a goose-side cancel only dropped the stream and the
+    /// harness kept running the turn (and any pending permission/tool) to completion.
+    cancel_prompt: Arc<Notify>,
     /// True after the first ACP prompt completes with the handoff context committed.
     /// Failed or abandoned first prompts reset this so the next prompt can retry it.
     handoff_context_sent: Arc<AtomicBool>,
@@ -400,12 +404,14 @@ impl AcpProvider {
             Arc::new(Mutex::new(HashMap::new()));
         let context_size = Arc::new(AtomicU64::new(0));
         let effort = AcpEffortState::new();
+        let cancel_prompt = Arc::new(Notify::new());
         let client_loop = AcpClientLoop::new(
             config,
             goose_mode_shared.clone(),
             pending_tool_updates.clone(),
             context_size.clone(),
             effort.clone(),
+            cancel_prompt.clone(),
         );
         let (cancel_tx, cancel_rx) = oneshot::channel();
         let loop_thread = spawn_client_loop(run(client_loop, rx, init_tx, cancel_rx));
@@ -446,6 +452,7 @@ impl AcpProvider {
             session: Mutex::new(session),
             pending_confirmations: Arc::new(TokioMutex::new(HashMap::new())),
             pending_tool_updates,
+            cancel_prompt,
             handoff_context_sent: Arc::new(AtomicBool::new(false)),
             context_size,
             model_config_option_id,
@@ -811,6 +818,10 @@ impl Provider for AcpProvider {
         PermissionRouting::ActionRequired
     }
 
+    fn cancel_prompt(&self) {
+        self.cancel_prompt.notify_one();
+    }
+
     fn manages_own_context(&self) -> bool {
         true
     }
@@ -1039,10 +1050,20 @@ impl Provider for AcpProvider {
                             yield (Some(action_required), None);
                         }
 
-                        let confirmation = rx.await.unwrap_or(PermissionConfirmation {
-                            principal_type: PrincipalType::Tool,
-                            permission: Permission::Cancel,
-                        });
+                        // Headless clients (WhatsApp, a web relay) may never answer a
+                        // permission request; without a bound the tool sat "pending"
+                        // forever and the harness never issued the tool call.
+                        let confirmation = tokio::time::timeout(permission_timeout(), rx)
+                            .await
+                            .ok()
+                            .and_then(|r| r.ok())
+                            .unwrap_or_else(|| {
+                                tracing::warn!("ACP permission request unanswered, cancelling tool");
+                                PermissionConfirmation {
+                                    principal_type: PrincipalType::Tool,
+                                    permission: Permission::Cancel,
+                                }
+                            });
 
                         pending_confirmations.lock().await.remove(&request_id);
 
@@ -1121,10 +1142,19 @@ impl Drop for AcpProvider {
     fn drop(&mut self) {
         self.tx.take();
         let _cancel_tx = self.cancel_tx.take();
+        // Never `join()` inline: the provider is dropped from a tokio worker (session
+        // replace / load), and if the harness child is wedged on a pending tool the join
+        // parked that worker — the ACP WebSocket stopped being served (relay saw 1006) and
+        // the next session/new hung. Reap the loop thread off to the side instead.
         if let Some(h) = self.loop_thread.take() {
-            if let Err(e) = h.join() {
-                tracing::debug!("AcpClientLoop thread panicked: {e:?}");
-            }
+            std::thread::Builder::new()
+                .name("acp-loop-reaper".into())
+                .spawn(move || {
+                    if let Err(e) = h.join() {
+                        tracing::debug!("AcpClientLoop thread panicked: {e:?}");
+                    }
+                })
+                .ok();
         }
     }
 }
@@ -1136,6 +1166,7 @@ struct AcpClientLoop {
     pending_tool_updates: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
     context_size: Arc<AtomicU64>,
     effort: AcpEffortState,
+    cancel_prompt: Arc<Notify>,
 }
 
 impl AcpClientLoop {
@@ -1145,6 +1176,7 @@ impl AcpClientLoop {
         pending_tool_updates: Arc<Mutex<HashMap<String, AccumulatedToolCall>>>,
         context_size: Arc<AtomicU64>,
         effort: AcpEffortState,
+        cancel_prompt: Arc<Notify>,
     ) -> Self {
         Self {
             config,
@@ -1153,6 +1185,7 @@ impl AcpClientLoop {
             pending_tool_updates,
             context_size,
             effort,
+            cancel_prompt,
         }
     }
 
@@ -1208,6 +1241,7 @@ impl AcpClientLoop {
             pending_tool_updates,
             context_size,
             effort,
+            cancel_prompt,
         } = self;
         let notification_callback = config.notification_callback.clone();
         let reverse_modes = reverse_mode_mapping(&config.mode_mapping);
@@ -1435,6 +1469,7 @@ impl AcpClientLoop {
                     prompt_response_tx,
                     session_state,
                     init_tx,
+                    cancel_prompt,
                 )
                 .await
             })
@@ -1541,6 +1576,7 @@ async fn handle_requests(
     prompt_response_tx: Arc<Mutex<Option<mpsc::Sender<AcpUpdate>>>>,
     session_state: AcpSessionState,
     init_tx: oneshot::Sender<Result<InitializeResponse>>,
+    cancel_prompt: Arc<Notify>,
 ) -> Result<(), agent_client_protocol::Error> {
     let mut init_tx = Some(init_tx);
 
@@ -1712,10 +1748,24 @@ async fn handle_requests(
             } => {
                 *prompt_response_tx.lock().unwrap() = Some(response_tx.clone());
 
-                let response: Result<PromptResponse, _> = cx
-                    .send_request(PromptRequest::new(session_id, content))
-                    .block_task()
-                    .await;
+                // A cancel pulsed while the prompt is in flight becomes a real
+                // `session/cancel` to the harness; we keep waiting for its (Cancelled)
+                // reply so the loop stays in sync with the child.
+                let prompt = cx
+                    .send_request(PromptRequest::new(session_id.clone(), content))
+                    .block_task();
+                tokio::pin!(prompt);
+                let response: Result<PromptResponse, _> = loop {
+                    tokio::select! {
+                        r = &mut prompt => break r,
+                        _ = cancel_prompt.notified() => {
+                            tracing::info!(session_id = %session_id.0, "forwarding session/cancel to ACP agent");
+                            if let Err(e) = cx.send_notification(CancelNotification::new(session_id.clone())) {
+                                tracing::warn!("session/cancel to ACP agent failed: {e}");
+                            }
+                        }
+                    }
+                };
 
                 match response {
                     Ok(r) => {
@@ -2365,6 +2415,16 @@ fn resolve_mode(
     }
 }
 
+/// How long an unanswered `session/request_permission` waits before it is cancelled.
+/// `GHOSTY_ACP_PERMISSION_TIMEOUT_SECS`, default 120.
+fn permission_timeout() -> std::time::Duration {
+    let secs = std::env::var("GHOSTY_ACP_PERMISSION_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(120);
+    std::time::Duration::from_secs(secs)
+}
+
 fn permission_decision_from_mode(goose_mode: GooseMode) -> Option<PermissionDecision> {
     match goose_mode {
         GooseMode::Auto => Some(PermissionDecision::AllowOnce),
@@ -2526,6 +2586,7 @@ mod tests {
                     response: NewSessionResponse::new("test-session"),
                 }),
                 pending_confirmations: Arc::new(TokioMutex::new(HashMap::new())),
+                cancel_prompt: Arc::new(Notify::new()),
                 pending_tool_updates: Arc::new(Mutex::new(HashMap::new())),
                 handoff_context_sent: Arc::new(AtomicBool::new(false)),
                 context_size: Arc::new(AtomicU64::new(0)),

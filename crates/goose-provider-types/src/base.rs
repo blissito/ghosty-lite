@@ -715,6 +715,11 @@ pub trait Provider: Send + Sync {
         PermissionRouting::Noop
     }
 
+    /// Called when the caller cancels the prompt in flight. Providers that wrap another
+    /// harness (ACP) forward it so the harness stops too; the default is a no-op because
+    /// dropping the stream is enough for an HTTP provider.
+    fn cancel_prompt(&self) {}
+
     async fn handle_permission_confirmation(
         &self,
         _request_id: &str,
