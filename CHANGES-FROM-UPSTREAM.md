@@ -12,6 +12,9 @@ respuesta y revienta el stack de 2 MB en `bang_shell_visibility_…`), #11501 (a
 redirecciones del cliente MCP HTTP: rompería MCPs que redirigen legítimamente) y #12006
 (`usage_update` por llamada: el front no lo lee).
 
+**Cherry-pick 2026-10-22:** #12062 (`df1e2850c`, prefijo del subagente cacheable: el id va al primer
+mensaje y las tools se ordenan; aplica igual a los hijos async de `summon`).
+
 ## Qué se quitó
 
 | Componente | Por qué |
