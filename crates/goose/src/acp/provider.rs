@@ -104,6 +104,49 @@ enum ClientRequest {
     },
 }
 
+/// Steer en vuelo hacia el arnés: petición de extensión `_session/steering` (la
+/// anuncia `claude-agent-acp` en `InitializeResponse._meta.steering.supported`). El
+/// arnés mete el mensaje al turno que corre; `outcome` dice si entró (`injected`) o si
+/// no había turno (`startedNewTurn` / `promptRequired`).
+#[derive(
+    Debug, Clone, serde::Serialize, serde::Deserialize, agent_client_protocol::JsonRpcRequest,
+)]
+#[request(method = "_session/steering", response = SteeringResponse)]
+#[serde(rename_all = "camelCase")]
+struct SteeringRequest {
+    session_id: SessionId,
+    prompt: Vec<ContentBlock>,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+    agent_client_protocol::JsonRpcResponse,
+)]
+#[serde(rename_all = "camelCase")]
+struct SteeringResponse {
+    #[serde(default)]
+    outcome: String,
+}
+
+/// Un steer pendiente de entregar al arnés, con a quién avisarle si entró.
+struct SteerMsg {
+    prompt: Vec<ContentBlock>,
+    reply: oneshot::Sender<bool>,
+}
+
+/// Cola de steers + campana. El loop del prompt la vacía dentro de su `select!`, que es
+/// el único sitio con acceso a la conexión mientras el turno corre (mismo patrón que
+/// `cancel_prompt`).
+#[derive(Default)]
+struct SteerQueue {
+    notify: Notify,
+    pending: Mutex<Vec<SteerMsg>>,
+}
+
 // tokio I/O handles can't move between runtimes, so the child process must be
 // spawned inside the OS thread. This closure lets start() share all other logic.
 type ClientLoopFn = Box<
@@ -285,6 +328,8 @@ pub struct AcpProvider {
     /// `session/cancel`. Without this a goose-side cancel only dropped the stream and the
     /// harness kept running the turn (and any pending permission/tool) to completion.
     cancel_prompt: Arc<Notify>,
+    /// Steers hacia el turno en vuelo (ver `SteerQueue`).
+    steer_queue: Arc<SteerQueue>,
     /// True after the first ACP prompt completes with the handoff context committed.
     /// Failed or abandoned first prompts reset this so the next prompt can retry it.
     handoff_context_sent: Arc<AtomicBool>,
@@ -403,6 +448,7 @@ impl AcpProvider {
         let context_size = Arc::new(AtomicU64::new(0));
         let effort = AcpEffortState::new();
         let cancel_prompt = Arc::new(Notify::new());
+        let steer_queue = Arc::new(SteerQueue::default());
         let client_loop = AcpClientLoop::new(
             config,
             goose_mode_shared.clone(),
@@ -410,6 +456,7 @@ impl AcpProvider {
             context_size.clone(),
             effort.clone(),
             cancel_prompt.clone(),
+            steer_queue.clone(),
         );
         let (cancel_tx, cancel_rx) = oneshot::channel();
         let loop_thread = spawn_client_loop(run(client_loop, rx, init_tx, cancel_rx));
@@ -451,6 +498,7 @@ impl AcpProvider {
             pending_confirmations: Arc::new(TokioMutex::new(HashMap::new())),
             pending_tool_updates,
             cancel_prompt,
+            steer_queue,
             handoff_context_sent: Arc::new(AtomicBool::new(false)),
             context_size,
             model_config_option_id,
@@ -823,6 +871,30 @@ impl Provider for AcpProvider {
         self.cancel_prompt.notify_one();
     }
 
+    /// Steer al turno en vuelo por `_session/steering`. Sólo el loop del prompt puede
+    /// hablar con el arnés mientras corre, así que se encola y se espera su veredicto; si
+    /// no hay turno vivo nadie vacía la cola y el timeout lo devuelve como `false`.
+    async fn inject_user_message(&self, message: &Message) -> bool {
+        let prompt = messages_to_prompt(std::slice::from_ref(message), None);
+        if prompt.is_empty() {
+            return false;
+        }
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.steer_queue.pending.lock().unwrap().push(SteerMsg {
+            prompt,
+            reply: reply_tx,
+        });
+        self.steer_queue.notify.notify_one();
+        match tokio::time::timeout(std::time::Duration::from_secs(5), reply_rx).await {
+            Ok(Ok(entered)) => entered,
+            _ => {
+                // Nadie lo recogió: no había prompt en vuelo. Se retira de la cola.
+                self.steer_queue.pending.lock().unwrap().clear();
+                false
+            }
+        }
+    }
+
     fn manages_own_context(&self) -> bool {
         true
     }
@@ -1168,6 +1240,7 @@ struct AcpClientLoop {
     context_size: Arc<AtomicU64>,
     effort: AcpEffortState,
     cancel_prompt: Arc<Notify>,
+    steer_queue: Arc<SteerQueue>,
 }
 
 impl AcpClientLoop {
@@ -1178,6 +1251,7 @@ impl AcpClientLoop {
         context_size: Arc<AtomicU64>,
         effort: AcpEffortState,
         cancel_prompt: Arc<Notify>,
+        steer_queue: Arc<SteerQueue>,
     ) -> Self {
         Self {
             config,
@@ -1187,6 +1261,7 @@ impl AcpClientLoop {
             context_size,
             effort,
             cancel_prompt,
+            steer_queue,
         }
     }
 
@@ -1243,6 +1318,7 @@ impl AcpClientLoop {
             context_size,
             effort,
             cancel_prompt,
+            steer_queue,
         } = self;
         let notification_callback = config.notification_callback.clone();
         let reverse_modes = reverse_mode_mapping(&config.mode_mapping);
@@ -1471,6 +1547,7 @@ impl AcpClientLoop {
                     session_state,
                     init_tx,
                     cancel_prompt,
+                    steer_queue,
                 )
                 .await
             })
@@ -1579,6 +1656,7 @@ async fn handle_requests(
     session_state: AcpSessionState,
     init_tx: oneshot::Sender<Result<InitializeResponse>>,
     cancel_prompt: Arc<Notify>,
+    steer_queue: Arc<SteerQueue>,
 ) -> Result<(), agent_client_protocol::Error> {
     let mut init_tx = Some(init_tx);
 
@@ -1764,6 +1842,23 @@ async fn handle_requests(
                             tracing::info!(session_id = %session_id.0, "forwarding session/cancel to ACP agent");
                             if let Err(e) = cx.send_notification(CancelNotification::new(session_id.clone())) {
                                 tracing::warn!("session/cancel to ACP agent failed: {e}");
+                            }
+                        }
+                        // Un steer mientras el prompt corre: `_session/steering` al arnés, que
+                        // lo pliega en el turno en curso. Se contesta `true` sólo si dijo
+                        // `injected`; cualquier otra cosa manda el mensaje a la cola de goose.
+                        _ = steer_queue.notify.notified() => {
+                            let pending: Vec<SteerMsg> = std::mem::take(&mut *steer_queue.pending.lock().unwrap());
+                            for msg in pending {
+                                let req = SteeringRequest { session_id: session_id.clone(), prompt: msg.prompt };
+                                let entered = match cx.send_request(req).block_task().await {
+                                    Ok(r) => r.outcome == "injected",
+                                    Err(e) => {
+                                        tracing::warn!(session_id = %session_id.0, "_session/steering failed: {e}");
+                                        false
+                                    }
+                                };
+                                let _ = msg.reply.send(entered);
                             }
                         }
                     }
@@ -2586,6 +2681,7 @@ mod tests {
                 }),
                 pending_confirmations: Arc::new(TokioMutex::new(HashMap::new())),
                 cancel_prompt: Arc::new(Notify::new()),
+                steer_queue: Arc::new(SteerQueue::default()),
                 pending_tool_updates: Arc::new(Mutex::new(HashMap::new())),
                 handoff_context_sent: Arc::new(AtomicBool::new(false)),
                 context_size: Arc::new(AtomicU64::new(0)),
