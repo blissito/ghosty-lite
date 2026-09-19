@@ -147,9 +147,41 @@ impl<T: Serialize> ControlResponse<T> {
     }
 }
 
+/// El stdin del CLI vive fuera del lock del proceso: el turno en vuelo posee
+/// `CliProcess` entero (lee stdout), y un steer necesita escribir al stdin en ese
+/// momento. Cada escritura toma este lock sólo lo que dura una línea.
+type SharedStdin = Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncWrite + Unpin + Send>>>;
+
+/// Lo que un steer necesita del turno en vuelo: a qué stdin escribir y con qué
+/// `session_id`. Se publica al tomar el lock del proceso y se retira al soltarlo.
+#[derive(Clone)]
+struct LiveTurn {
+    stdin: SharedStdin,
+    session_id: String,
+}
+
+/// Retira el `LiveTurn` publicado cuando el stream del turno termina o se dropea.
+struct LiveTurnGuard(Arc<std::sync::Mutex<Option<LiveTurn>>>);
+
+impl std::fmt::Debug for LiveTurn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LiveTurn")
+            .field("session_id", &self.session_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for LiveTurnGuard {
+    fn drop(&mut self) {
+        if let Ok(mut slot) = self.0.lock() {
+            *slot = None;
+        }
+    }
+}
+
 struct CliProcess {
     child: tokio::process::Child,
-    stdin: Box<dyn tokio::io::AsyncWrite + Unpin + Send>,
+    stdin: SharedStdin,
     reader: BufReader<Box<dyn tokio::io::AsyncRead + Unpin + Send>>,
     #[allow(dead_code)]
     stderr_handle: tokio::task::JoinHandle<String>,
@@ -181,7 +213,8 @@ impl CliProcess {
         body: ControlRequestBody,
     ) -> Result<Option<Value>, ProviderError> {
         let request_id = self.next_request_id();
-        exchange_control(&mut self.stdin, &mut self.reader, &request_id, body).await
+        let mut stdin = self.stdin.lock().await;
+        exchange_control(&mut *stdin, &mut self.reader, &request_id, body).await
     }
 
     async fn send_set_model(&mut self, model: &str) -> Result<(), ProviderError> {
@@ -272,6 +305,10 @@ pub struct ClaudeCodeProvider {
         Arc<tokio::sync::Mutex<HashMap<String, oneshot::Sender<PermissionConfirmation>>>>,
     #[serde(skip)]
     initial_mode: tokio::sync::Mutex<Option<GooseMode>>,
+    /// Turno en vuelo, si lo hay (ver `LiveTurn`). Mutex síncrono a propósito: el guard
+    /// lo limpia en `Drop`, donde no hay `await`.
+    #[serde(skip)]
+    live_turn: Arc<std::sync::Mutex<Option<LiveTurn>>>,
 }
 
 impl ClaudeCodeProvider {
@@ -427,7 +464,7 @@ impl ClaudeCodeProvider {
 
         let mut process = CliProcess {
             child,
-            stdin: Box::new(stdin),
+            stdin: Arc::new(tokio::sync::Mutex::new(Box::new(stdin))),
             reader: BufReader::new(Box::new(stdout)),
             stderr_handle,
             current_model: model.model_name.clone(),
@@ -666,6 +703,7 @@ impl ProviderDef for ClaudeCodeProvider {
                 cli_process: tokio::sync::OnceCell::new(),
                 pending_confirmations: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
                 initial_mode: tokio::sync::Mutex::new(None),
+                live_turn: Arc::new(std::sync::Mutex::new(None)),
             })
         })
     }
@@ -729,6 +767,37 @@ impl Provider for ClaudeCodeProvider {
         PermissionRouting::ActionRequired
     }
 
+    /// Un steer a mitad de turno: se escribe como otra línea `user` al stdin del CLI,
+    /// que la pliega en el turno en curso (el modelo la ve en el siguiente resultado de
+    /// tool). Sin turno vivo no hay a quién dárselo y se devuelve `false` para que el
+    /// agente lo encole como siempre.
+    async fn inject_user_message(&self, message: &Message) -> bool {
+        let live = match self.live_turn.lock() {
+            Ok(slot) => slot.clone(),
+            Err(_) => None,
+        };
+        let Some(live) = live else {
+            return false;
+        };
+        let blocks = self.last_user_content_blocks(std::slice::from_ref(message));
+        if blocks.is_empty() {
+            return false;
+        }
+        let mut line = build_stream_json_input(&blocks, &live.session_id);
+        line.push('\n');
+        let written = {
+            let mut stdin = live.stdin.lock().await;
+            stdin.write_all(line.as_bytes()).await
+        };
+        match written {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::warn!("claude-code: no se pudo inyectar el steer al turno en vuelo: {e}");
+                false
+            }
+        }
+    }
+
     async fn handle_permission_confirmation(
         &self,
         request_id: &str,
@@ -762,11 +831,20 @@ impl Provider for ClaudeCodeProvider {
         let model_name = model_config.model_name.clone();
         let mut current_text_message_id = uuid::Uuid::new_v4().to_string();
         let pending_confirmations = Arc::clone(&self.pending_confirmations);
+        let live_turn = Arc::clone(&self.live_turn);
 
         Ok(Box::pin(try_stream! {
             // Single lock acquisition covers write-to-stdin and read-from-stdout,
             // eliminating the race window between the two.
             let mut process = process_arc.lock_owned().await;
+            // Desde aquí hasta que el stream termine, un steer puede escribir al stdin.
+            let _live_turn = LiveTurnGuard(Arc::clone(&live_turn));
+            if let Ok(mut slot) = live_turn.lock() {
+                *slot = Some(LiveTurn {
+                    stdin: Arc::clone(&process.stdin),
+                    session_id: session_id.clone(),
+                });
+            }
 
             // Clean up pending permissions from a cancelled stream
             {
@@ -781,7 +859,7 @@ impl Provider for ClaudeCodeProvider {
                         ProviderError::RequestFailed(format!("Failed to serialize cleanup deny response: {e}"))
                     })?;
                     s.push('\n');
-                    let _ = process.stdin.write_all(s.as_bytes()).await;
+                    let _ = process.stdin.lock().await.write_all(s.as_bytes()).await;
                 }
             }
 
@@ -790,12 +868,14 @@ impl Provider for ClaudeCodeProvider {
 
             process
                 .stdin
+                .lock()
+                .await
                 .write_all(ndjson_line.as_bytes())
                 .await
                 .map_err(|e| {
                     ProviderError::RequestFailed(format!("Failed to write to stdin: {}", e))
                 })?;
-            process.stdin.write_all(b"\n").await.map_err(|e| {
+            process.stdin.lock().await.write_all(b"\n").await.map_err(|e| {
                 ProviderError::RequestFailed(format!("Failed to write newline to stdin: {}", e))
             })?;
 
@@ -993,7 +1073,7 @@ impl Provider for ClaudeCodeProvider {
                                         })?;
                                         tracing::debug!(json = %resp_str, "can_use_tool control_response sent");
                                         resp_str.push('\n');
-                                        process.stdin.write_all(resp_str.as_bytes()).await.map_err(|e| {
+                                        process.stdin.lock().await.write_all(resp_str.as_bytes()).await.map_err(|e| {
                                             ProviderError::RequestFailed(format!("Failed to write permission response: {e}"))
                                         })?;
                                     }
@@ -1390,6 +1470,7 @@ mod tests {
             cli_process: tokio::sync::OnceCell::new(),
             pending_confirmations: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             initial_mode: tokio::sync::Mutex::new(None),
+            live_turn: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -1403,7 +1484,7 @@ mod tests {
         let (stdin_writer, stdin_reader) = tokio::io::duplex(1024);
         let process = CliProcess {
             child,
-            stdin: Box::new(stdin_writer),
+            stdin: Arc::new(tokio::sync::Mutex::new(Box::new(stdin_writer))),
             reader: BufReader::new(Box::new(std::io::Cursor::new(
                 canned_stdout.as_bytes().to_vec(),
             ))),
@@ -1501,7 +1582,15 @@ mod tests {
         mut reader: tokio::io::DuplexStream,
     ) -> String {
         use tokio::io::AsyncReadExt;
-        provider.cli_process.get().unwrap().lock().await.stdin = Box::new(tokio::io::sink());
+        *provider
+            .cli_process
+            .get()
+            .unwrap()
+            .lock()
+            .await
+            .stdin
+            .lock()
+            .await = Box::new(tokio::io::sink());
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf).await.unwrap();
         String::from_utf8(buf).unwrap()
@@ -1567,7 +1656,7 @@ mod tests {
         }
 
         let result = process.send_set_model(target_model).await;
-        process.stdin = Box::new(tokio::io::sink());
+        *process.stdin.lock().await = Box::new(tokio::io::sink());
         let mut stdin_bytes = Vec::new();
         stdin_reader.read_to_end(&mut stdin_bytes).await.unwrap();
 

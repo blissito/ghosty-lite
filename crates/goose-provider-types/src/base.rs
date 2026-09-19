@@ -710,6 +710,15 @@ pub trait Provider: Send + Sync {
     /// dropping the stream is enough for an HTTP provider.
     fn cancel_prompt(&self) {}
 
+    /// Inject a user message into the turn in flight, if the provider wraps a harness
+    /// that runs its own tool loop (claude-code): goose's own steer queue only drains
+    /// between goose iterations, and a harness turn is a single iteration, so the queue
+    /// would deliver the steer after the whole turn. Returns `true` when the message
+    /// was handed to the live turn; `false` (the default) means "queue it as usual".
+    async fn inject_user_message(&self, _message: &Message) -> bool {
+        false
+    }
+
     async fn handle_permission_confirmation(
         &self,
         _request_id: &str,

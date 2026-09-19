@@ -566,6 +566,24 @@ impl Agent {
     }
 
     pub async fn steer(&self, session_id: &str, message: Message) {
+        // Un provider que envuelve un arnés (claude-code) corre todas sus tools en una
+        // sola llamada: la cola sólo se drenaría al terminar el turno. Si el provider del
+        // turno en vuelo acepta el mensaje, se le entrega directo y queda en el historial.
+        let in_turn = self.turn_provider.lock().await.clone();
+        if let Some(provider) = in_turn {
+            if provider.inject_user_message(&message).await {
+                let message = Message::with_steer(message);
+                if let Err(e) = self
+                    .config
+                    .session_manager
+                    .add_message(session_id, &message)
+                    .await
+                {
+                    tracing::warn!("steer inyectado pero no persistido en {session_id}: {e}");
+                }
+                return;
+            }
+        }
         self.steer_queue(session_id)
             .await
             .lock()
