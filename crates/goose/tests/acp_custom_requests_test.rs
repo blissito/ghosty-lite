@@ -4,7 +4,7 @@
 mod common_tests;
 
 use agent_client_protocol::schema::v1::{
-    ContentBlock, PromptRequest, SessionUpdate, StopReason, TextContent,
+    ContentBlock, McpServer, McpServerHttp, PromptRequest, SessionUpdate, StopReason, TextContent,
 };
 use common_tests::fixtures::server::AcpServerConnection;
 use common_tests::fixtures::{
@@ -15,7 +15,7 @@ use goose::acp::server::AcpProviderFactory;
 use goose::providers::base::{MessageStream, Provider};
 use goose_providers::errors::ProviderError;
 use goose_providers::model::ModelConfig;
-use goose_test_support::{EnforceSessionId, IgnoreSessionId};
+use goose_test_support::{EnforceSessionId, IgnoreSessionId, McpFixture, FAKE_CODE};
 use serial_test::serial;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
@@ -24,19 +24,19 @@ use std::time::Duration;
 use common_tests::fixtures::OpenAiFixture;
 
 const DEFAULT_ACP_TEST_CONFIG: &str =
-    "GHOSTY_MODEL: gpt-4o\nGHOSTY_PROVIDER: openai\nGHOSTY_DISABLE_KEYRING: true\n";
+    "GOOSE_MODEL: gpt-4o\nGOOSE_PROVIDER: openai\nGOOSE_DISABLE_KEYRING: true\n";
 
 static ACP_CONFIG_ROOT: LazyLock<tempfile::TempDir> =
     LazyLock::new(|| tempfile::tempdir().unwrap());
 
 fn write_acp_global_config(contents: &str) -> PathBuf {
-    std::env::set_var("GHOSTY_PATH_ROOT", ACP_CONFIG_ROOT.path());
-    std::env::set_var("GHOSTY_DISABLE_KEYRING", "1");
+    std::env::set_var("GOOSE_PATH_ROOT", ACP_CONFIG_ROOT.path());
+    std::env::set_var("GOOSE_DISABLE_KEYRING", "1");
     let config_dir = goose::config::paths::Paths::config_dir();
     std::fs::create_dir_all(&config_dir).unwrap();
     let mut contents = contents.to_string();
-    if !contents.contains("GHOSTY_DISABLE_KEYRING") {
-        contents.push_str("GHOSTY_DISABLE_KEYRING: true\n");
+    if !contents.contains("GOOSE_DISABLE_KEYRING") {
+        contents.push_str("GOOSE_DISABLE_KEYRING: true\n");
     }
     std::fs::write(
         config_dir.join(goose::config::base::CONFIG_YAML_NAME),
@@ -343,7 +343,7 @@ fn test_custom_session_extensions_add_list_remove() {
                 .expect("extensions should be an array");
             extensions
                 .iter()
-                .find(|extension| extension["name"] == extension_name)
+                .find(|entry| entry["extension"]["name"] == extension_name)
                 .cloned()
         };
 
@@ -369,18 +369,39 @@ fn test_custom_session_extensions_add_list_remove() {
         .await;
         assert!(add_result.is_ok(), "expected ok, got: {:?}", add_result);
 
-        let extension = list_extension()
+        let entry = list_extension()
             .await
             .unwrap_or_else(|| panic!("missing added session extension"));
+        assert_eq!(entry["extensionKey"], extension_name);
+        let extension = &entry["extension"];
         assert_eq!(extension["type"], "platform");
         assert_eq!(extension["name"], extension_name);
+
+        let unknown_remove_result = send_custom(
+            conn.cx(),
+            "_goose/unstable/session/extensions/remove",
+            serde_json::json!({
+                "sessionId": session_id.clone(),
+                "extensionKey": "missing-extension",
+            }),
+        )
+        .await;
+        assert_eq!(
+            unknown_remove_result.unwrap_err(),
+            agent_client_protocol::Error::invalid_params()
+                .data("Extension 'missing-extension' not found")
+        );
+        assert!(
+            list_extension().await.is_some(),
+            "unknown key must not remove another extension"
+        );
 
         let remove_result = send_custom(
             conn.cx(),
             "_goose/unstable/session/extensions/remove",
             serde_json::json!({
                 "sessionId": session_id.clone(),
-                "name": extension_name,
+                "extensionKey": extension_name,
             }),
         )
         .await;
@@ -393,50 +414,6 @@ fn test_custom_session_extensions_add_list_remove() {
         assert!(
             list_extension().await.is_none(),
             "removed session extension should not be listed"
-        );
-    });
-}
-
-#[test]
-#[serial]
-fn test_custom_get_available_extensions() {
-    write_acp_global_config(DEFAULT_ACP_TEST_CONFIG);
-    run_test(async move {
-        let openai = OpenAiFixture::new(vec![], Arc::new(EnforceSessionId::default())).await;
-        let conn = AcpServerConnection::new(TestConnectionConfig::default(), openai).await;
-
-        let result = send_custom(
-            conn.cx(),
-            "_goose/unstable/extensions/available",
-            serde_json::json!({}),
-        )
-        .await;
-        assert!(result.is_ok(), "expected ok, got: {:?}", result);
-
-        let response = result.unwrap();
-        let extensions = response
-            .get("extensions")
-            .and_then(|extensions| extensions.as_array())
-            .expect("extensions should be an array");
-        assert!(!extensions.is_empty(), "extensions should not be empty");
-        assert!(
-            extensions.iter().all(|extension| matches!(
-                extension["type"].as_str(),
-                Some("builtin" | "platform")
-            )),
-            "available extensions should only include builtin and platform entries"
-        );
-        assert!(
-            extensions.iter().any(|extension| {
-                extension["type"] == "platform" && extension["name"] == "developer"
-            }),
-            "developer platform extension should be available"
-        );
-        assert!(
-            !extensions.iter().any(|extension| {
-                extension["type"] == "platform" && extension["name"] == "orchestrator"
-            }),
-            "hidden orchestrator platform extension should not be available"
         );
     });
 }
@@ -630,7 +607,7 @@ fn test_steer_session_adds_input_to_active_prompt() {
             steer_chunks
                 .iter()
                 .any(|t| t.contains("steer while active")),
-            "expected a chunk marked _meta.ghosty.steer with the steer text, got: {steer_chunks:?}"
+            "expected a chunk marked _meta.goose.steer with the steer text, got: {steer_chunks:?}"
         );
 
         // The queued steer must be announced (so a UI can show it as pending)
@@ -721,9 +698,9 @@ fn test_custom_provider_inventory_includes_metadata() {
 
 #[test]
 #[serial]
-fn test_custom_preferences_read_save_remove() {
+fn test_custom_preferences_read_save() {
     let config_dir = write_acp_global_config(
-        "GHOSTY_MODEL: gpt-4o\nGHOSTY_PROVIDER: openai\nGHOSTY_AUTO_COMPACT_THRESHOLD: 0.7\nGHOSTY_THINKING_EFFORT: high\nVOICE_AUTO_SUBMIT_PHRASES: send it\n",
+        "GOOSE_MODEL: gpt-4o\nGOOSE_PROVIDER: openai\nGOOSE_AUTO_COMPACT_THRESHOLD: 0.7\nGOOSE_THINKING_EFFORT: high\nVOICE_AUTO_SUBMIT_PHRASES: send it\n",
     );
 
     run_test(async move {
@@ -741,7 +718,8 @@ fn test_custom_preferences_read_save_remove() {
                 "keys": [
                     "autoCompactThreshold",
                     "gooseThinkingEffort",
-                    "voiceAutoSubmitPhrases"
+                    "voiceAutoSubmitPhrases",
+                    "voiceDictationPreferredMic"
                 ],
             }),
         )
@@ -753,6 +731,7 @@ fn test_custom_preferences_read_save_remove() {
                 { "key": "autoCompactThreshold", "value": 0.7 },
                 { "key": "gooseThinkingEffort", "value": "high" },
                 { "key": "voiceAutoSubmitPhrases", "value": "send it" },
+                { "key": "voiceDictationPreferredMic", "value": null },
             ]))
         );
 
@@ -762,39 +741,29 @@ fn test_custom_preferences_read_save_remove() {
             serde_json::json!({
                 "values": [
                     { "key": "gooseThinkingEffort", "value": "disabled" },
-                    { "key": "autoCompactThreshold", "value": 0.5 },
-                    { "key": "voiceAutoSubmitPhrases", "value": "go" }
+                    { "key": "voiceDictationProvider", "value": "__disabled__" },
+                    { "key": "voiceDictationPreferredMic", "value": "mic-1" }
                 ],
             }),
         )
         .await
         .expect("preferences save should succeed");
 
-        send_custom(
-            conn.cx(),
-            "_goose/unstable/preferences/remove",
-            serde_json::json!({
-                "keys": ["autoCompactThreshold"],
-            }),
-        )
-        .await
-        .expect("preferences remove should succeed");
-
         let response = send_custom(
             conn.cx(),
             "_goose/unstable/preferences/read",
             serde_json::json!({
-                "keys": ["gooseThinkingEffort", "autoCompactThreshold", "voiceAutoSubmitPhrases"],
+                "keys": ["gooseThinkingEffort", "voiceDictationProvider", "voiceDictationPreferredMic"],
             }),
         )
         .await
-        .expect("preferences read after remove should succeed");
+        .expect("preferences read after save should succeed");
         assert_eq!(
             response.get("values"),
             Some(&serde_json::json!([
                 { "key": "gooseThinkingEffort", "value": "off" },
-                { "key": "autoCompactThreshold", "value": null },
-                { "key": "voiceAutoSubmitPhrases", "value": "go" },
+                { "key": "voiceDictationProvider", "value": "__disabled__" },
+                { "key": "voiceDictationPreferredMic", "value": "mic-1" },
             ]))
         );
     });
@@ -824,6 +793,12 @@ fn test_custom_preferences_save_rejects_invalid_values() {
             serde_json::json!({
                 "values": [{ "key": "voiceAutoSubmitPhrases", "value": ["send"] }],
             }),
+            serde_json::json!({
+                "values": [{ "key": "voiceDictationProvider", "value": "bogus" }],
+            }),
+            serde_json::json!({
+                "values": [{ "key": "voiceDictationPreferredMic", "value": "" }],
+            }),
         ];
 
         for payload in invalid_payloads {
@@ -836,8 +811,8 @@ fn test_custom_preferences_save_rejects_invalid_values() {
             "_goose/unstable/preferences/save",
             serde_json::json!({
                 "values": [
-                    { "key": "voiceAutoSubmitPhrases", "value": "send" },
-                    { "key": "gooseThinkingEffort", "value": "bogus" }
+                    { "key": "voiceDictationPreferredMic", "value": "mic-1" },
+                    { "key": "voiceDictationProvider", "value": "bogus" }
                 ],
             }),
         )
@@ -848,7 +823,7 @@ fn test_custom_preferences_save_rejects_invalid_values() {
             conn.cx(),
             "_goose/unstable/preferences/read",
             serde_json::json!({
-                "keys": ["voiceAutoSubmitPhrases"],
+                "keys": ["voiceDictationPreferredMic"],
             }),
         )
         .await
@@ -856,7 +831,7 @@ fn test_custom_preferences_save_rejects_invalid_values() {
         assert_eq!(
             response.get("values"),
             Some(&serde_json::json!([
-                { "key": "voiceAutoSubmitPhrases", "value": null },
+                { "key": "voiceDictationPreferredMic", "value": null },
             ]))
         );
     });
@@ -866,7 +841,7 @@ fn test_custom_preferences_save_rejects_invalid_values() {
 #[serial]
 fn test_custom_defaults_read() {
     let config_dir = write_acp_global_config(
-        "GHOSTY_MODEL: claude-3-5-haiku-latest\nGHOSTY_PROVIDER: anthropic\n",
+        "GOOSE_MODEL: claude-3-5-haiku-latest\nGOOSE_PROVIDER: anthropic\n",
     );
 
     run_test(async move {
@@ -903,7 +878,7 @@ fn test_custom_defaults_read() {
 fn test_custom_defaults_save_allows_unlisted_model() {
     let _env = env_lock::lock_env([("ANTHROPIC_API_KEY", Some("test-key"))]);
     let config_dir = write_acp_global_config(
-        "GHOSTY_MODEL: claude-3-5-haiku-latest\nGHOSTY_PROVIDER: anthropic\n",
+        "GOOSE_MODEL: claude-3-5-haiku-latest\nGOOSE_PROVIDER: anthropic\n",
     );
 
     run_test(async move {
@@ -983,7 +958,7 @@ fn test_provider_switching_updates_session_state() {
 
         conn.set_config_option(&session_id, "provider", "goose")
             .await
-            .expect("provider reset to ghosty should succeed");
+            .expect("provider reset to goose should succeed");
     });
 }
 
@@ -1022,7 +997,7 @@ fn test_developer_fs_requests_use_acp_session_id() {
         )
         .await;
         let config_dir = write_acp_global_config(&format!(
-            "GHOSTY_MODEL: gpt-4.1\nGHOSTY_PROVIDER: openai\nOPENAI_HOST: {}\n",
+            "GOOSE_MODEL: gpt-4.1\nGOOSE_PROVIDER: openai\nOPENAI_HOST: {}\n",
             openai.uri()
         ));
         let config = TestConnectionConfig {
@@ -1187,5 +1162,78 @@ fn test_custom_provider_supported_models_maps_authentication_error() {
 
         assert_eq!(error.code, agent_client_protocol::ErrorCode::AuthRequired);
         assert!(error.to_string().contains("credentials rejected"));
+    });
+}
+
+const APP_TOOL: &str = "mcp-fixture__get_code";
+
+async fn connect_with_mcp_fixture(mcp_url: &str, mode: &str) -> (AcpServerConnection, String) {
+    let openai = OpenAiFixture::new(vec![], Arc::new(IgnoreSessionId)).await;
+    let mcp_servers = vec![McpServer::Http(McpServerHttp::new("mcp-fixture", mcp_url))];
+    let config = TestConnectionConfig {
+        mcp_servers,
+        ..Default::default()
+    };
+    let mut conn = AcpServerConnection::new(config, openai).await;
+    let SessionData { session, .. } = conn.new_session().await.unwrap();
+    let session_id = session.session_id().0.to_string();
+    conn.set_mode(&session_id, mode).await.unwrap();
+    (conn, session_id)
+}
+
+async fn call_app_tool(
+    conn: &AcpServerConnection,
+    session_id: &str,
+) -> Result<serde_json::Value, agent_client_protocol::Error> {
+    send_custom(
+        conn.cx(),
+        "_goose/unstable/tools/call",
+        serde_json::json!({
+            "sessionId": session_id,
+            "extensionName": "mcp-fixture",
+            "name": APP_TOOL
+        }),
+    )
+    .await
+}
+
+#[test]
+#[serial]
+fn test_app_tool_call_requires_auto_mode() {
+    write_acp_global_config(DEFAULT_ACP_TEST_CONFIG);
+    run_test(async move {
+        let mcp = McpFixture::new().await;
+
+        for mode in ["approve", "smart_approve", "chat"] {
+            let (conn, session_id) = connect_with_mcp_fixture(&mcp.url, mode).await;
+            let error = call_app_tool(&conn, &session_id)
+                .await
+                .expect_err("app tool call should be rejected outside auto mode");
+            assert_eq!(error.code, agent_client_protocol::ErrorCode::InvalidParams);
+            assert!(error
+                .to_string()
+                .contains("app tool calls require auto mode"));
+        }
+    });
+}
+
+#[test]
+#[serial]
+fn test_app_tool_call_dispatched_in_auto_mode() {
+    write_acp_global_config(DEFAULT_ACP_TEST_CONFIG);
+    run_test(async move {
+        let mcp = McpFixture::new().await;
+        let (conn, session_id) = connect_with_mcp_fixture(&mcp.url, "auto").await;
+
+        let response = call_app_tool(&conn, &session_id)
+            .await
+            .expect("app tool call should dispatch in auto mode");
+        let text = response["content"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|block| block.get("text").and_then(|text| text.as_str()))
+            .collect::<String>();
+        assert!(text.contains(FAKE_CODE));
     });
 }

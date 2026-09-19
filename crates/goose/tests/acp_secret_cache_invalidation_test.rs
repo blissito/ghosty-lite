@@ -71,14 +71,13 @@ fn write_secrets(config_dir: &std::path::Path, secrets: &str) {
 
 #[test]
 #[serial]
-fn acp_secret_mutations_and_inventory_refresh_invalidate_global_secret_cache() {
+fn provider_secret_mutations_and_inventory_refresh_invalidate_global_secret_cache() {
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path().to_string_lossy().to_string();
     let _env = env_lock::lock_env([
         ("GHOSTY_PATH_ROOT", Some(root_path.as_str())),
         ("GHOSTY_DISABLE_KEYRING", Some("1")),
         ("ANTHROPIC_API_KEY", None),
-        ("GROQ_API_KEY", None),
         ("OPENAI_API_KEY", None),
         ("XAI_API_KEY", None),
         ("XAI_HOST", None),
@@ -87,16 +86,7 @@ fn acp_secret_mutations_and_inventory_refresh_invalidate_global_secret_cache() {
     let config_dir = Paths::config_dir();
     let data_dir = Paths::data_dir();
     write_config(&config_dir);
-    write_secrets(&config_dir, "GROQ_API_KEY: stale-key\n");
-
     run_test(async move {
-        assert_eq!(
-            Config::global()
-                .get_secret::<String>("GROQ_API_KEY")
-                .unwrap(),
-            "stale-key"
-        );
-
         let openai = common_tests::fixtures::OpenAiFixture::new(
             vec![],
             Arc::new(EnforceSessionId::default()),

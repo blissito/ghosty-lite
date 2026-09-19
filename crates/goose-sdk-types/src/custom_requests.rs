@@ -42,7 +42,7 @@ pub struct AddSessionExtensionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct RemoveSessionExtensionRequest {
     pub session_id: String,
-    pub name: String,
+    pub extension_key: String,
 }
 
 /// List all tools available in a session.
@@ -99,6 +99,7 @@ pub struct ReadResourceResponse {
 #[serde(rename_all = "camelCase")]
 pub struct GooseToolCallRequest {
     pub session_id: String,
+    pub extension_name: String,
     pub name: String,
     #[serde(default)]
     pub arguments: serde_json::Value,
@@ -182,6 +183,7 @@ pub struct SteerSessionResponse {
     pub message_id: String,
 }
 
+/// Get a diagnostic report for a session.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
 #[request(
     method = "_goose/unstable/diagnostics/get",
@@ -353,18 +355,11 @@ pub struct GooseExtensionEntry {
     pub config_key: Option<String>,
 }
 
-/// List Ghosty-owned extension definitions available to configure or enable.
-#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
-#[request(
-    method = "_goose/unstable/extensions/available",
-    response = GetAvailableExtensionsResponse
-)]
-pub struct GetAvailableExtensionsRequest {}
-
-#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcResponse)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct GetAvailableExtensionsResponse {
-    pub extensions: Vec<GooseExtension>,
+pub struct SessionExtensionEntry {
+    pub extension: GooseExtension,
+    pub extension_key: String,
 }
 
 /// List configured extensions and any warnings.
@@ -416,6 +411,7 @@ pub struct SetConfigExtensionEnabledRequest {
     pub enabled: bool,
 }
 
+/// List extensions enabled for an active session.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
 #[request(method = "_goose/unstable/session/extensions/list", response = GetSessionExtensionsResponse)]
 #[serde(rename_all = "camelCase")]
@@ -425,7 +421,7 @@ pub struct GetSessionExtensionsRequest {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcResponse)]
 pub struct GetSessionExtensionsResponse {
-    pub extensions: Vec<GooseExtension>,
+    pub extensions: Vec<SessionExtensionEntry>,
 }
 
 /// Read allowlisted user preferences. Empty `keys` means all supported preferences.
@@ -446,15 +442,7 @@ pub struct PreferencesSaveRequest {
     pub values: Vec<PreferenceValue>,
 }
 
-/// Remove allowlisted user preferences.
-#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
-#[request(method = "_goose/unstable/preferences/remove", response = EmptyResponse)]
-#[serde(rename_all = "camelCase")]
-pub struct PreferencesRemoveRequest {
-    #[serde(default)]
-    pub keys: Vec<PreferenceKey>,
-}
-
+/// Read one goose configuration value.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
 #[request(method = "_goose/unstable/config/read", response = ConfigReadResponse)]
 #[serde(rename_all = "camelCase")]
@@ -471,6 +459,7 @@ pub struct ConfigReadResponse {
     pub value: serde_json::Value,
 }
 
+/// Create or replace one goose configuration value.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
 #[request(method = "_goose/unstable/config/upsert", response = EmptyResponse)]
 #[serde(rename_all = "camelCase")]
@@ -481,6 +470,7 @@ pub struct ConfigUpsertRequest {
     pub is_secret: bool,
 }
 
+/// Remove one goose configuration value.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
 #[request(method = "_goose/unstable/config/remove", response = EmptyResponse)]
 #[serde(rename_all = "camelCase")]
@@ -490,6 +480,7 @@ pub struct ConfigRemoveRequest {
     pub is_secret: bool,
 }
 
+/// Read all non-secret goose configuration values.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
 #[request(method = "_goose/unstable/config/read-all", response = ConfigReadAllResponse)]
 #[serde(rename_all = "camelCase")]
@@ -1144,6 +1135,7 @@ pub struct CustomProviderConfigDto {
     pub catalog_provider_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_path: Option<String>,
+    pub toolshim: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_key_env: Option<String>,
     pub api_key_set: bool,
@@ -1183,6 +1175,7 @@ pub struct CustomProviderUpsertDto {
 pub struct CustomProviderCreateRequest {
     #[serde(flatten)]
     pub provider: CustomProviderUpsertDto,
+    pub toolshim: bool,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcResponse)]
@@ -1223,6 +1216,7 @@ pub struct CustomProviderUpdateRequest {
     pub provider_id: String,
     #[serde(flatten)]
     pub provider: CustomProviderUpsertDto,
+    pub toolshim: bool,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcResponse)]
@@ -1645,8 +1639,6 @@ pub struct ProviderInventoryEntryDto {
     pub available: bool,
     /// Provider classification such as `Preferred`, `Builtin`, `Declarative`, or `Custom`.
     pub provider_type: String,
-    /// Whether this inventory entry represents an agent provider or a model provider.
-    pub category: ProviderSetupCategoryDto,
     /// Whether this provider communicates through ACP.
     #[serde(default)]
     pub acp: bool,
@@ -1678,9 +1670,6 @@ pub struct ProviderInventoryEntryDto {
     pub last_refresh_error: Option<String>,
     /// Whether we believe this data may be outdated.
     pub stale: bool,
-    /// Guidance message shown when this provider manages its own model selection externally.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_selection_hint: Option<String>,
 }
 
 /// Empty success response for operations that return no data.

@@ -1,9 +1,9 @@
 # Cambios respecto a goose (upstream)
 
-ghosty-lite parte de [goose](https://github.com/block/goose) **v1.48.0** (tag
-`fork-point-v1.48.0`, commit `25021517f`). Este archivo cumple la sección 4(b) de la
+ghosty-lite parte de [goose](https://github.com/block/goose) **v1.51.0** (tag
+`fork-point-v1.51.0`, commit `1a4249ac9`; el fork nació en v1.48.0, `fork-point-v1.48.0`, y se sincronizó el 2026-09-19). Este archivo cumple la sección 4(b) de la
 licencia Apache 2.0: deja constancia de que los archivos fueron modificados. El detalle
-línea a línea está en `git log fork-point-v1.48.0..HEAD`.
+línea a línea está en `git log fork-point-v1.51.0..HEAD` (y `fork-point-v1.48.0..` para la historia completa).
 
 ## Qué se quitó
 
@@ -22,7 +22,7 @@ línea a línea está en `git log fork-point-v1.48.0..HEAD`.
 | Self-update (sigstore), `native-tls`, arboard, manpages | imagen inmutable; sólo rustls |
 | AWS Bedrock/SageMaker | feature opcional `aws-providers`, apagada por defecto |
 
-Cargo.lock: 1,339 → 955 paquetes. Miembros del workspace: 16 → 12 (11 de goose + `ghosty-telemetry`).
+Cargo.lock: 1350 → 976 paquetes (v1.51.0). Miembros del workspace: 15 → 12 (de goose + `ghosty-telemetry`).
 
 ## Qué se renombró
 

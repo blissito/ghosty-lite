@@ -539,8 +539,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -605,14 +603,22 @@ mod tests {
                 .update_provider(provider, ModelConfig::new("mock-model"), &session.id)
                 .await?;
 
+            let session_id = session.id;
             let session_config = SessionConfig {
-                id: session.id,
+                id: session_id.clone(),
                 schedule_id: None,
                 max_turns: Some(1),
                 retry_config: None,
             };
 
-            let reply_stream = agent.reply(user_message, session_config, None).await?;
+            let reply_stream = agent
+                .reply(
+                    user_message,
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
+                .await?;
             tokio::pin!(reply_stream);
 
             let mut responses = Vec::new();
@@ -623,13 +629,13 @@ mod tests {
                             response.content.first()
                         {
                             if let goose::conversation::message::ActionRequiredData::ToolConfirmation { id, .. } = &action.data {
-                                agent.handle_confirmation(
-                                    id.clone(),
-                                    goose::permission::PermissionConfirmation {
-                                        principal_type: goose::permission::permission_confirmation::PrincipalType::Tool,
-                                        permission: goose::permission::Permission::AllowOnce,
-                                    }
-                                ).await;
+                                agent
+                                    .submit_tool_confirmation(
+                                        &session_id,
+                                        id,
+                                        goose::permission::Permission::AllowOnce,
+                                    )
+                                    .await?;
                             }
                         }
                         responses.push(response);
@@ -713,8 +719,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -807,7 +811,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("Hello"), session_config, None)
+                .reply(
+                    Message::user().with_text("Hello"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
 
@@ -896,8 +905,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -1025,7 +1032,14 @@ mod tests {
                 retry_config: None,
             };
 
-            let reply_stream = agent.reply(user_message, session_config, None).await?;
+            let reply_stream = agent
+                .reply(
+                    user_message,
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
+                .await?;
             tokio::pin!(reply_stream);
 
             // Drain the stream
@@ -1257,8 +1271,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -1391,6 +1403,7 @@ mod tests {
                 .reply(
                     Message::user().with_text("Do something then say hello"),
                     session_config,
+                    goose::agents::state_machine::enabled(),
                     None,
                 )
                 .await?;
@@ -1445,6 +1458,7 @@ mod tests {
                 .reply(
                     Message::user().with_text("Tell me more"),
                     session_config2,
+                    goose::agents::state_machine::enabled(),
                     Some(cancel_token),
                 )
                 .await?;
@@ -1537,8 +1551,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -1639,6 +1651,7 @@ mod tests {
                 .reply(
                     Message::user().with_text("Use the test tool"),
                     session_config,
+                    goose::agents::state_machine::enabled(),
                     None,
                 )
                 .await?;
@@ -1740,8 +1753,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -1842,6 +1853,7 @@ mod tests {
                 .reply(
                     Message::user().with_text("Use the test tool"),
                     session_config,
+                    goose::agents::state_machine::enabled(),
                     None,
                 )
                 .await?;
@@ -1893,8 +1905,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -1928,19 +1938,23 @@ mod tests {
                 );
                 match call {
                     0 => {
-                        // Chunk 1: reasoning only (no tool calls)
-                        let thinking =
-                            Message::assistant().with_thinking("multi-tool reasoning", "sig_0");
-                        // Chunk 2: two tool calls, no reasoning — the multi-tool bug scenario
+                        let thinking = Message::assistant()
+                            .with_id("msg_multi")
+                            .with_thinking("multi-tool reasoning", "sig_0");
+                        let text = Message::assistant()
+                            .with_id("msg_multi")
+                            .with_text("Calling both tools.");
                         let tc1 = CallToolRequestParams::new("tool_a")
                             .with_arguments(object!({"p": "1"}));
                         let tc2 = CallToolRequestParams::new("tool_b")
                             .with_arguments(object!({"p": "2"}));
                         let tool_msg = Message::assistant()
+                            .with_id("msg_multi")
                             .with_tool_request("call_1", Ok(tc1))
                             .with_tool_request("call_2", Ok(tc2));
                         let stream = futures::stream::iter(vec![
                             Ok((Some(thinking), None)),
+                            Ok((Some(text), None)),
                             Ok((Some(tool_msg), Some(usage))),
                         ]);
                         Ok(Box::pin(stream))
@@ -2005,6 +2019,7 @@ mod tests {
                 .reply(
                     Message::user().with_text("Use both tools"),
                     session_config,
+                    goose::agents::state_machine::enabled(),
                     None,
                 )
                 .await?;
@@ -2109,14 +2124,11 @@ mod tests {
             Ok(())
         }
 
-        /// Regression for the Anthropic 400: signed thinking arriving in a
-        /// separate chunk before the tool calls must be stored once per
-        /// tool-call message and never as an extra standalone message. When the
-        /// Anthropic formatter serializes the persisted history, each assistant
-        /// turn must carry exactly one thinking block — a duplicate signed block
-        /// is rejected with `thinking blocks ... cannot be modified`.
         #[tokio::test]
-        async fn test_signed_thinking_not_duplicated_for_anthropic() -> Result<()> {
+        async fn test_signed_thinking_leads_text_and_tool_calls_for_anthropic() -> Result<()> {
+            use goose::conversation::{
+                fix_conversation, merge_consecutive_messages_for_request, Conversation,
+            };
             use goose_providers::formats::anthropic::format_messages as anthropic_format;
 
             let temp_dir = tempfile::tempdir()?;
@@ -2157,6 +2169,7 @@ mod tests {
                 .reply(
                     Message::user().with_text("Use both tools"),
                     session_config,
+                    goose::agents::state_machine::enabled(),
                     None,
                 )
                 .await?;
@@ -2172,38 +2185,49 @@ mod tests {
                 .messages()
                 .to_vec();
 
-            // No standalone thinking-only assistant message should be persisted —
-            // thinking lives on the tool-call messages.
-            let standalone_thinking = messages.iter().any(|m| {
-                m.role == rmcp::model::Role::Assistant
-                    && !m.content.is_empty()
-                    && m.content
-                        .iter()
-                        .all(|c| matches!(c, MessageContent::Thinking(_)))
-            });
+            let first_tool_row = messages
+                .iter()
+                .find(|message| {
+                    message.content.iter().any(
+                        |content| matches!(content, MessageContent::ToolRequest(r) if r.id == "call_1"),
+                    )
+                })
+                .expect("the first tool call is persisted");
+            assert_eq!(first_tool_row.id.as_deref(), Some("msg_multi"));
             assert!(
-                !standalone_thinking,
-                "thinking must not be persisted as a standalone message: {messages:#?}"
+                matches!(
+                    first_tool_row.content.as_slice(),
+                    [
+                        MessageContent::Thinking(_),
+                        MessageContent::Text(_),
+                        MessageContent::ToolRequest(_)
+                    ]
+                ),
+                "the first tool call must share the prefix's row: {:#?}",
+                first_tool_row.content
             );
 
-            // Every serialized Anthropic assistant message must contain at most
-            // one thinking block; a duplicate is what triggers the 400.
-            let spec = anthropic_format(&messages);
-            for msg in &spec {
-                if msg.get("role") == Some(&serde_json::json!("assistant")) {
-                    if let Some(content) = msg.get("content").and_then(|c| c.as_array()) {
-                        let thinking_blocks = content
-                            .iter()
-                            .filter(|c| c.get("type") == Some(&serde_json::json!("thinking")))
-                            .count();
-                        assert!(
-                            thinking_blocks <= 1,
-                            "assistant message has {thinking_blocks} thinking blocks, \
-                             Anthropic rejects duplicates: {msg}"
-                        );
-                    }
-                }
-            }
+            let (fixed, _) = fix_conversation(Conversation::new_unvalidated(messages));
+            let spec = anthropic_format(&merge_consecutive_messages_for_request(
+                fixed.messages().to_vec(),
+            ));
+            let assistant_block_types: Vec<Vec<&str>> = spec
+                .iter()
+                .filter(|msg| msg["role"] == "assistant")
+                .map(|msg| {
+                    msg["content"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .filter_map(|block| block["type"].as_str())
+                        .collect()
+                })
+                .collect();
+            assert_eq!(
+                assistant_block_types,
+                vec![vec!["thinking", "text", "tool_use"], vec!["tool_use"]],
+                "{spec:#?}"
+            );
 
             Ok(())
         }
@@ -2254,8 +2278,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -2346,7 +2368,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("Hello"), session_config, None)
+                .reply(
+                    Message::user().with_text("Hello"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
 
@@ -2425,7 +2452,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("Hello"), session_config, None)
+                .reply(
+                    Message::user().with_text("Hello"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
 
@@ -2524,6 +2556,7 @@ mod tests {
                 .reply(
                     Message::user().with_text("/goal make all tests pass"),
                     session_config,
+                    goose::agents::state_machine::enabled(),
                     None,
                 )
                 .await?;
@@ -2585,7 +2618,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("/goal"), session_config, None)
+                .reply(
+                    Message::user().with_text("/goal"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
 
@@ -2708,7 +2746,12 @@ mod tests {
                 retry_config: None,
             };
             let stream = agent
-                .reply(Message::user().with_text(text), session_config, None)
+                .reply(
+                    Message::user().with_text(text),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(stream);
             while let Some(event) = stream.next().await {
@@ -2766,8 +2809,9 @@ mod tests {
         }
     }
 
-    mod frontend_extension_tests {
+    mod add_extensions_bulk_tests {
         use super::*;
+        use goose::agents::extension::Envs;
         use goose::agents::{AgentConfig, ExtensionConfig};
         use goose::config::permission::PermissionManager;
         use goose::config::GooseMode;
@@ -2775,116 +2819,36 @@ mod tests {
         use goose::session::{
             EnabledExtensionsState, ExtensionData, ExtensionState, SessionManager,
         };
-        use rmcp::model::Tool;
-        use rmcp::object;
         use tempfile::TempDir;
 
-        fn frontend_extension_with_tool(name: &str, tool_name: &str) -> ExtensionConfig {
-            ExtensionConfig::Frontend {
+        fn platform_extension(name: &str) -> ExtensionConfig {
+            ExtensionConfig::Platform {
                 name: name.to_string(),
-                description: format!("Frontend test extension {name}"),
-                tools: vec![Tool::new(
-                    tool_name.to_string(),
-                    format!("Run {tool_name} from the frontend"),
-                    object!({
-                        "type": "object",
-                        "properties": {
-                            "message": { "type": "string" }
-                        },
-                        "required": ["message"]
-                    }),
-                )],
-                instructions: Some(format!("Use the {tool_name} tool.")),
+                description: format!("Platform test extension {name}"),
+                display_name: None,
                 bundled: None,
                 available_tools: vec![],
             }
         }
 
-        fn frontend_extension() -> ExtensionConfig {
-            frontend_extension_with_tool("frontend-e2e", "frontend__echo")
+        fn unloadable_stdio_extension(name: &str) -> ExtensionConfig {
+            ExtensionConfig::Stdio {
+                name: name.to_string(),
+                description: format!("Unloadable test extension {name}"),
+                cmd: "goose-test-definitely-missing-binary".to_string(),
+                args: vec![],
+                envs: Envs::default(),
+                env_keys: vec![],
+                timeout: Some(1),
+                cwd: None,
+                bundled: None,
+                available_tools: vec![],
+            }
         }
 
-        #[tokio::test]
-        async fn test_frontend_extensions_are_persisted_listed_and_removed() {
-            let temp_dir = TempDir::new().unwrap();
-            let data_dir = temp_dir.path().to_path_buf();
-            let session_manager = Arc::new(SessionManager::new(data_dir.clone()));
-            let permission_manager = Arc::new(PermissionManager::new(data_dir));
-            let agent = Agent::with_config(AgentConfig::new(
-                session_manager.clone(),
-                permission_manager,
-                None,
-                GooseMode::default(),
-                false,
-                GoosePlatform::GooseDesktop,
-            ));
-
-            let session = session_manager
-                .create_session(
-                    std::env::current_dir().unwrap(),
-                    "frontend-extension-test".to_string(),
-                    SessionType::Hidden,
-                    GooseMode::default(),
-                )
-                .await
-                .unwrap();
-
-            agent
-                .add_extension(frontend_extension(), &session.id)
-                .await
-                .unwrap();
-
-            let listed_tools = agent.list_tools(&session.id, None).await;
-            assert!(listed_tools
-                .iter()
-                .any(|tool| tool.name == "frontend__echo"));
-
-            let filtered_tools = agent
-                .list_tools(&session.id, Some("frontend-e2e".to_string()))
-                .await;
-            assert_eq!(filtered_tools.len(), 1);
-            assert_eq!(filtered_tools[0].name, "frontend__echo");
-
-            let extension_names = agent.list_extensions().await;
-            assert!(extension_names.iter().any(|name| name == "frontend-e2e"));
-
-            let persisted_session = session_manager
-                .get_session(&session.id, false)
-                .await
-                .unwrap();
-            let persisted_extensions =
-                EnabledExtensionsState::from_extension_data(&persisted_session.extension_data)
-                    .unwrap()
-                    .extensions;
-            assert!(persisted_extensions
-                .iter()
-                .any(|extension| extension.name() == "frontend-e2e"));
-
-            agent
-                .remove_extension("frontend-e2e", &session.id)
-                .await
-                .unwrap();
-
-            let listed_tools = agent.list_tools(&session.id, None).await;
-            assert!(!listed_tools
-                .iter()
-                .any(|tool| tool.name == "frontend__echo"));
-
-            let persisted_session = session_manager
-                .get_session(&session.id, false)
-                .await
-                .unwrap();
-            let persisted_extensions =
-                EnabledExtensionsState::from_extension_data(&persisted_session.extension_data)
-                    .unwrap()
-                    .extensions;
-            assert!(persisted_extensions
-                .iter()
-                .all(|extension| extension.name() != "frontend-e2e"));
-        }
-
-        #[tokio::test]
-        async fn test_concurrent_frontend_session_load_keeps_all_tools() {
+        async fn setup_agent_and_session(
+            test_name: &str,
+        ) -> (Arc<Agent>, Arc<SessionManager>, String, TempDir) {
             let temp_dir = TempDir::new().unwrap();
             let data_dir = temp_dir.path().to_path_buf();
             let session_manager = Arc::new(SessionManager::new(data_dir.clone()));
@@ -2901,56 +2865,174 @@ mod tests {
             let session = session_manager
                 .create_session(
                     std::env::current_dir().unwrap(),
-                    "frontend-extension-load-test".to_string(),
+                    test_name.to_string(),
                     SessionType::Hidden,
                     GooseMode::default(),
                 )
                 .await
                 .unwrap();
 
-            let expected_tools = (0..12)
-                .map(|index| format!("frontend__tool_{index}"))
-                .collect::<Vec<_>>();
-            let extensions = expected_tools
-                .iter()
-                .enumerate()
-                .map(|(index, tool_name)| {
-                    frontend_extension_with_tool(&format!("frontend-{index}"), tool_name)
-                })
-                .collect::<Vec<_>>();
+            (agent, session_manager, session.id, temp_dir)
+        }
 
+        async fn persisted_extension_names(
+            session_manager: &SessionManager,
+            session_id: &str,
+        ) -> Vec<String> {
+            let session = session_manager
+                .get_session(session_id, false)
+                .await
+                .unwrap();
+            let mut names: Vec<String> =
+                EnabledExtensionsState::from_extension_data(&session.extension_data)
+                    .expect("enabled extensions state should be persisted")
+                    .extensions
+                    .iter()
+                    .map(|extension| extension.name())
+                    .collect();
+            names.sort();
+            names
+        }
+
+        #[tokio::test]
+        async fn test_bulk_load_persists_loaded_extensions() {
+            let (agent, session_manager, session_id, _temp_dir) =
+                setup_agent_and_session("bulk-load-persist-success").await;
+
+            let results = agent
+                .add_extensions_bulk(
+                    vec![platform_extension("analyze"), platform_extension("todo")],
+                    &session_id,
+                )
+                .await
+                .unwrap();
+
+            assert!(results.iter().all(|result| result.success));
+            assert_eq!(
+                persisted_extension_names(&session_manager, &session_id).await,
+                vec!["analyze".to_string(), "todo".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn test_bulk_load_partial_failure_persists_only_loaded_extensions() {
+            let (agent, session_manager, session_id, _temp_dir) =
+                setup_agent_and_session("bulk-load-persist-partial-failure").await;
+
+            let results = agent
+                .add_extensions_bulk(
+                    vec![
+                        platform_extension("todo"),
+                        unloadable_stdio_extension("broken"),
+                    ],
+                    &session_id,
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(results.len(), 2);
+            assert!(results
+                .iter()
+                .any(|result| result.name == "todo" && result.success));
+            let broken = results
+                .iter()
+                .find(|result| result.name == "broken")
+                .expect("broken extension should report a result");
+            assert!(!broken.success);
+            assert!(broken.error.is_some());
+
+            assert_eq!(
+                persisted_extension_names(&session_manager, &session_id).await,
+                vec!["todo".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn test_bulk_load_total_failure_drops_failed_extensions_from_session_state() {
+            let (agent, session_manager, session_id, _temp_dir) =
+                setup_agent_and_session("bulk-load-persist-total-failure").await;
+
+            // Seed the session with the extensions up front, mirroring a resume
+            // where the enabled list is read back from session metadata.
+            let extensions = vec![
+                unloadable_stdio_extension("broken-one"),
+                unloadable_stdio_extension("broken-two"),
+            ];
             let mut extension_data = ExtensionData::new();
-            EnabledExtensionsState::new(extensions)
+            EnabledExtensionsState::new(extensions.clone())
                 .to_extension_data(&mut extension_data)
                 .unwrap();
             session_manager
-                .update(&session.id)
+                .update(&session_id)
                 .extension_data(extension_data)
                 .apply()
                 .await
                 .unwrap();
 
-            let session = session_manager
-                .get_session(&session.id, false)
+            let results = agent
+                .add_extensions_bulk(extensions, &session_id)
                 .await
                 .unwrap();
-            let load_results = agent.load_extensions_from_session(&session).await;
+
+            assert_eq!(results.len(), 2);
             assert!(
-                load_results.iter().all(|result| result.success),
-                "failed to load frontend extensions: {load_results:?}",
+                results.iter().all(|result| !result.success),
+                "expected every extension load to fail: {results:?}"
             );
 
-            let listed_tools = agent.list_tools(&session.id, None).await;
-            for tool_name in expected_tools {
-                assert!(
-                    listed_tools.iter().any(|tool| tool.name == tool_name),
-                    "expected listed frontend tool {tool_name}",
-                );
-                assert!(
-                    agent.is_frontend_tool(&tool_name).await,
-                    "expected frontend dispatch state for {tool_name}",
-                );
-            }
+            // The failed extensions must not stay marked as enabled in the
+            // session, otherwise every future resume retries them.
+            assert_eq!(
+                persisted_extension_names(&session_manager, &session_id).await,
+                Vec::<String>::new()
+            );
+        }
+
+        #[tokio::test]
+        async fn test_bulk_load_cancellation_preserves_pending_extensions() {
+            let (agent, session_manager, session_id, _temp_dir) =
+                setup_agent_and_session("bulk-load-persist-cancellation").await;
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let (accepted_tx, accepted_rx) = tokio::sync::oneshot::channel();
+            let server = tokio::spawn(async move {
+                let (_connection, _) = listener.accept().await.unwrap();
+                let _ = accepted_tx.send(());
+                std::future::pending::<()>().await;
+            });
+
+            let extension = ExtensionConfig::streamable_http(
+                "pending".to_string(),
+                format!("http://{address}"),
+                "Pending test extension".to_string(),
+                30_u64,
+            );
+            agent
+                .persist_extension_configs(&session_id, vec![extension.clone()])
+                .await
+                .unwrap();
+            let load = tokio::spawn({
+                let agent = agent.clone();
+                let session_id = session_id.clone();
+                async move {
+                    agent
+                        .add_extensions_bulk(vec![extension], &session_id)
+                        .await
+                }
+            });
+
+            tokio::time::timeout(std::time::Duration::from_secs(5), accepted_rx)
+                .await
+                .expect("extension did not connect")
+                .expect("test server stopped before accepting a connection");
+
+            load.abort();
+            assert!(load.await.unwrap_err().is_cancelled());
+            server.abort();
+            assert_eq!(
+                persisted_extension_names(&session_manager, &session_id).await,
+                vec!["pending".to_string()]
+            );
         }
     }
 
@@ -3079,6 +3161,7 @@ mod tests {
                         max_turns: Some(3),
                         retry_config: None,
                     },
+                    goose::agents::state_machine::enabled(),
                     None,
                 )
                 .await?;
@@ -3166,8 +3249,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -3255,8 +3336,6 @@ mod tests {
                     model_doc_link: "".to_string(),
                     config_keys: vec![],
                     setup_steps: vec![],
-                    model_selection_hint: None,
-                    fast_model: None,
                     setup: None,
                     deprecated: None,
                 }
@@ -3366,7 +3445,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("Hi"), session_config, None)
+                .reply(
+                    Message::user().with_text("Hi"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
 
@@ -3550,7 +3634,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("Hi"), session_config, None)
+                .reply(
+                    Message::user().with_text("Hi"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
             let mut emitted_steer_id = None;
@@ -3636,6 +3725,7 @@ mod tests {
                         max_turns: Some(3),
                         retry_config: None,
                     },
+                    goose::agents::state_machine::enabled(),
                     None,
                 )
                 .await?;
@@ -3702,7 +3792,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("Hi"), session_config, None)
+                .reply(
+                    Message::user().with_text("Hi"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
 
@@ -3820,7 +3915,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("Hi"), session_config, None)
+                .reply(
+                    Message::user().with_text("Hi"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
 
@@ -3909,7 +4009,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("Hi"), session_config, None)
+                .reply(
+                    Message::user().with_text("Hi"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
 
@@ -3971,7 +4076,12 @@ mod tests {
             };
 
             let reply_stream = agent
-                .reply(Message::user().with_text("Hi"), session_config, None)
+                .reply(
+                    Message::user().with_text("Hi"),
+                    session_config,
+                    goose::agents::state_machine::enabled(),
+                    None,
+                )
                 .await?;
             tokio::pin!(reply_stream);
 

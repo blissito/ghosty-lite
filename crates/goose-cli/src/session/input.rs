@@ -24,11 +24,8 @@ pub enum InputResult {
     PromptCommand(PromptCommandOptions),
     GooseMode(String),
     Model(ModelCommandOptions),
-    Plan(PlanCommandOptions),
-    EndPlan,
     Clear,
     New,
-    Recipe(Option<String>),
     Compact,
     ToggleFullToolOutput,
     Edit(Option<String>),
@@ -41,11 +38,6 @@ pub struct PromptCommandOptions {
     pub name: String,
     pub info: bool,
     pub arguments: HashMap<String, String>,
-}
-
-#[derive(Debug)]
-pub struct PlanCommandOptions {
-    pub message_text: String,
 }
 
 #[derive(Debug, Default)]
@@ -237,11 +229,8 @@ fn handle_slash_command(input: &str) -> Option<InputResult> {
     const CMD_MODE: &str = "/mode ";
     const CMD_MODEL: &str = "/model";
     const CMD_MODEL_WITH_SPACE: &str = "/model ";
-    const CMD_PLAN: &str = "/plan";
-    const CMD_ENDPLAN: &str = "/endplan";
     const CMD_CLEAR: &str = "/clear";
     const CMD_NEW: &str = "/new";
-    const CMD_RECIPE: &str = "/recipe";
     const CMD_COMPACT: &str = "/compact";
     const CMD_SUMMARIZE_DEPRECATED: &str = "/summarize";
     const CMD_EDIT: &str = "/edit";
@@ -332,13 +321,8 @@ fn handle_slash_command(input: &str) -> Option<InputResult> {
                 }))
             }
         }
-        s if s.starts_with(CMD_PLAN) => {
-            parse_plan_command(s.get(CMD_PLAN.len()..).unwrap_or("").trim().to_string())
-        }
-        s if s == CMD_ENDPLAN => Some(InputResult::EndPlan),
         s if s == CMD_CLEAR => Some(InputResult::Clear),
         s if s == CMD_NEW => Some(InputResult::New),
-        s if s.starts_with(CMD_RECIPE) => parse_recipe_command(s),
         s if s == CMD_COMPACT => Some(InputResult::Compact),
         // Match "/skills" exactly or "/skills " with args - avoids matching e.g. "/skillsextra"
         s if s == CMD_SKILLS || s.starts_with(&format!("{CMD_SKILLS} ")) => {
@@ -369,31 +353,6 @@ fn handle_slash_command(input: &str) -> Option<InputResult> {
         }
         _ => None,
     }
-}
-
-fn parse_recipe_command(s: &str) -> Option<InputResult> {
-    const CMD_RECIPE: &str = "/recipe";
-
-    if s == CMD_RECIPE {
-        // No filepath provided, use default
-        return Some(InputResult::Recipe(None));
-    }
-
-    // Extract the filepath from the command
-    let filepath = s.get(CMD_RECIPE.len()..).unwrap_or("").trim();
-
-    if filepath.is_empty() {
-        return Some(InputResult::Recipe(None));
-    }
-
-    // Validate that the filepath ends with .yaml
-    if !filepath.to_lowercase().ends_with(".yaml") {
-        println!("{}", console::style("La ruta debe terminar en .yaml").red());
-        return Some(InputResult::Retry);
-    }
-
-    // Return the filepath for validation in the handler
-    Some(InputResult::Recipe(Some(filepath.to_string())))
 }
 
 fn parse_prompts_command(args: &str) -> Option<InputResult> {
@@ -449,14 +408,6 @@ fn parse_prompt_command(args: &str) -> Option<InputResult> {
     Some(InputResult::PromptCommand(options))
 }
 
-fn parse_plan_command(input: String) -> Option<InputResult> {
-    let options = PlanCommandOptions {
-        message_text: input.trim().to_string(),
-    };
-
-    Some(InputResult::Plan(options))
-}
-
 fn help_text() -> String {
     let modes = GooseMode::VARIANTS.join(", ");
     let newline_key = get_newline_key().to_ascii_uppercase();
@@ -468,38 +419,33 @@ fn help_text() -> String {
     };
 
     format!(
-        "Comandos disponibles:
-/exit o /quit - Salir de la sesión
-/t - Alternar tema claro / oscuro / ansi
-/t <nombre> - Fijar el tema (light, dark, ansi)
-/r - Mostrar la salida completa de las herramientas, sin recortar
-/extension <comando> - Agregar una extensión stdio (formato: ENV1=val1 comando args...)
-/builtin <nombres> - Agregar extensiones builtin por nombre (separadas por coma)
-/prompts [--extension <nombre>] - Listar los prompts disponibles, opcionalmente por extensión
-/prompt <n> [--info] [clave=valor...] - Ver o ejecutar un prompt
-/mode <nombre> - Cambiar el modo del agente ({modes})
-/model [nombre] - Ver el modelo actual, o cambiarlo para esta sesión con el mismo proveedor
-/model --provider <nombre> [modelo] - Cambiar de proveedor (y opcionalmente de modelo)
-/plan <mensaje> - Entrar en modo plan: arma un plan a partir de la conversación y pregunta si lo ejecuta.
-                  Si lo ejecuta, el modo pasa a 'auto' y al terminar vuelve al normal.
-                  El modelo sale de $GHOSTY_PLANNER_PROVIDER y $GHOSTY_PLANNER_MODEL; si no están, usa el actual.
-/endplan - Salir del modo plan
-/recipe [ruta] - Generar una receta a partir de la conversación y guardarla (debe terminar en .yaml).
-                 Sin ruta, se guarda en ./recipe.yaml.
-/compact - Compactar la conversación para liberar contexto conservando lo importante
-{additional_builtin_help}/status - Estado de la sesión: modelo, proveedor, modo y tokens
-/edit [texto] - Abrir tu editor para redactar un mensaje, opcionalmente con texto inicial.
-                Usa $GHOSTY_PROMPT_EDITOR, $VISUAL o $EDITOR, en ese orden.
-/skills - Listar las skills disponibles o activarlas por nombre (uso: /skills [<nombre>...])
-/? o /help - Esta ayuda
-/clear - Borrar el historial de la conversación
-/new - Empezar una sesión nueva en este proceso, con el mismo proveedor, modelo y extensiones
+        "Available commands:
+/exit or /quit - Exit the session
+/t - Toggle Light/Dark/Ansi theme
+/t <name> - Set theme directly (light, dark, ansi)
+/r - Toggle full tool output display (show complete tool parameters without truncation)
+/extension <command> - Add a stdio extension (format: ENV1=val1 command args...)
+/builtin <names> - Add builtin extensions by name (comma-separated)
+/prompts [--extension <name>] - List all available prompts, optionally filtered by extension
+/prompt <n> [--info] [key=value...] - Get prompt info or execute a prompt
+/mode <name> - Set the goose mode to use ({modes})
+/model [name] - Show the current model, or switch models for this session while keeping the same provider
+/model --provider <name> [model] - Switch to a different provider (optionally specifying a model)
+/compact - Compact the current conversation to reduce context length while preserving key information.
+{additional_builtin_help}/status - Show session status: model, provider, mode, and token usage.
+/edit [text] - Open your prompt editor to compose a message. Optionally pre-fill with text.
+               Uses $GHOSTY_PROMPT_EDITOR, $VISUAL, or $EDITOR (in that order).
+/skills - List available skills or enable skills by name (usage: /skills [<name>...])
+/? or /help - Display this help message
+/clear - Clears the current chat history
+/new - Start a fresh session in this process, keeping the current provider, model and extensions
 
-Navegación:
-Enter - Enviar el mensaje
-Ctrl+{newline_key} - Salto de línea (configurable con GHOSTY_CLI_NEWLINE_KEY)
-Ctrl+C - Borrar la línea si hay texto; si no, salir de la sesión
-Flechas arriba/abajo - Recorrer el historial"
+Navigation:
+Enter - Send message
+Ctrl+{newline_key} - Add a newline (configurable via GHOSTY_CLI_NEWLINE_KEY)
+Ctrl+C - Clear current line if text is entered, otherwise exit the session
+Up/Down arrows - Navigate through command history
+GHOSTY_CLI_BELL=true - Ring the terminal bell when goose finishes a turn or needs approval"
     )
 }
 
@@ -825,44 +771,9 @@ mod tests {
     }
 
     #[test]
-    fn test_plan_mode() {
-        // Test plan mode with no text
-        let result = handle_slash_command("/plan");
-        assert!(result.is_some());
-
-        // Test plan mode with text
-        let result = handle_slash_command("/plan hello world");
-        assert!(result.is_some());
-        let options = result.unwrap();
-        match options {
-            InputResult::Plan(options) => {
-                assert_eq!(options.message_text, "hello world");
-            }
-            _ => panic!("Expected Plan"),
-        }
-    }
-
-    #[test]
-    fn test_recipe_command() {
-        // Test recipe with no filepath
-        if let Some(InputResult::Recipe(filepath)) = handle_slash_command("/recipe") {
-            assert!(filepath.is_none());
-        } else {
-            panic!("Expected Recipe");
-        }
-
-        // Test recipe with filepath
-        if let Some(InputResult::Recipe(filepath)) =
-            handle_slash_command("/recipe /path/to/file.yaml")
-        {
-            assert_eq!(filepath, Some("/path/to/file.yaml".to_string()));
-        } else {
-            panic!("Expected recipe with filepath");
-        }
-
-        // Test recipe with invalid extension
-        let result = handle_slash_command("/recipe /path/to/file.txt");
-        assert!(matches!(result, Some(InputResult::Retry)));
+    fn recipe_command_is_not_builtin() {
+        assert!(handle_slash_command("/recipe").is_none());
+        assert!(handle_slash_command("/recipe recipe.yaml").is_none());
     }
 
     // --- should_use_editor_always tests ---

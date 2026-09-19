@@ -25,25 +25,22 @@ fn write_secrets(config_dir: &std::path::Path, contents: &str) {
 #[test]
 #[serial]
 fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
-    let root = tempfile::tempdir().unwrap();
-    let root_path = root.path().to_string_lossy().to_string();
     let _env = env_lock::lock_env([
-        ("GHOSTY_PATH_ROOT", Some(root_path.as_str())),
         ("GHOSTY_DISABLE_KEYRING", Some("1")),
         ("XAI_API_KEY", None),
         ("XAI_HOST", None),
         ("CUSTOM_STARK_ACP_PROVIDER_API_KEY", None),
     ]);
 
-    let config_dir = Paths::config_dir();
-    write_config(
-        &config_dir,
-        "GHOSTY_MODEL: gpt-4o\nGHOSTY_PROVIDER: openai\nGHOSTY_DISABLE_KEYRING: true\nXAI_HOST: https://api.x.ai/v1\n",
-    );
-    write_secrets(&config_dir, "XAI_API_KEY: xai-configured-key\n");
-    Config::global().invalidate_secrets_cache();
-
     run_test(async move {
+        let config_dir = Paths::config_dir();
+        write_config(
+            &config_dir,
+            "GHOSTY_MODEL: gpt-4o\nGOOSE_PROVIDER: openai\nGOOSE_DISABLE_KEYRING: true\nXAI_HOST: https://api.x.ai/v1\n",
+        );
+        write_secrets(&config_dir, "XAI_API_KEY: xai-configured-key\n");
+        Config::global().invalidate_secrets_cache();
+
         let openai = common_tests::fixtures::OpenAiFixture::new(
             vec![],
             Arc::new(EnforceSessionId::default()),
@@ -263,7 +260,8 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 },
                 "requiresAuth": true,
                 "catalogProviderId": "openai",
-                "basePath": "v1/chat/completions"
+                "basePath": "v1/chat/completions",
+                "toolshim": true
             }),
         )
         .await
@@ -300,7 +298,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
             .join(format!("{provider_id}.json"));
         assert!(
             custom_provider_path.exists(),
-            "custom provider should be saved in Ghosty's declarative provider store"
+            "custom provider should be saved in Goose's declarative provider store"
         );
         let saved_provider: DeclarativeProviderConfig =
             serde_json::from_str(&std::fs::read_to_string(&custom_provider_path).unwrap())
@@ -308,6 +306,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
         assert_eq!(saved_provider.name, provider_id);
         assert_eq!(saved_provider.display_name, "Stark ACP Provider");
         assert_eq!(saved_provider.base_url, "https://stark.example/v1");
+        assert!(saved_provider.toolshim);
         assert!(saved_provider.preserves_thinking);
         assert_eq!(
             saved_provider
@@ -322,7 +321,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 .get_secret::<String>("CUSTOM_STARK_ACP_PROVIDER_API_KEY")
                 .unwrap(),
             "created-custom-key",
-            "custom provider create should write through Ghosty's config store"
+            "custom provider create should write through Goose's config store"
         );
         assert!(
             load_provider(&provider_id)
@@ -353,6 +352,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 "requiresAuth": true,
                 "catalogProviderId": "openai",
                 "basePath": "v1/chat/completions",
+                "toolshim": true,
                 "apiKeyEnv": "CUSTOM_STARK_ACP_PROVIDER_API_KEY",
                 "apiKeySet": true,
                 "preservesThinking": true,
@@ -389,6 +389,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 "headers": {},
                 "requiresAuth": true,
                 "catalogProviderId": "zai",
+                "toolshim": true,
                 "preservesThinking": false
             }),
         )
@@ -407,7 +408,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 .get_secret::<String>("CUSTOM_STARK_ACP_PROVIDER_API_KEY")
                 .unwrap(),
             "updated-custom-key",
-            "custom provider update should write through Ghosty's config store"
+            "custom provider update should write through Goose's config store"
         );
         let updated_provider: DeclarativeProviderConfig =
             serde_json::from_str(&std::fs::read_to_string(&custom_provider_path).unwrap())
@@ -420,6 +421,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
         );
         assert_eq!(updated_provider.base_path, None);
         assert_eq!(updated_provider.headers, None);
+        assert!(updated_provider.toolshim);
         assert!(!updated_provider.preserves_thinking);
         assert_eq!(
             updated_provider
@@ -443,7 +445,8 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 "supportsStreaming": false,
                 "headers": {},
                 "requiresAuth": false,
-                "catalogProviderId": "zai"
+                "catalogProviderId": "zai",
+                "toolshim": false
             }),
         )
         .await
@@ -461,6 +464,7 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 .expect("no-auth provider should remain core-compatible");
         assert!(!no_auth_provider.requires_auth);
         assert_eq!(no_auth_provider.api_key_env, "");
+        assert!(!no_auth_provider.toolshim);
         assert!(!no_auth_provider.preserves_thinking);
         assert!(
             matches!(
@@ -483,7 +487,8 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 "supportsStreaming": false,
                 "headers": {},
                 "requiresAuth": true,
-                "catalogProviderId": "zai"
+                "catalogProviderId": "zai",
+                "toolshim": false
             }),
         )
         .await
@@ -603,7 +608,8 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 "apiKey": "secret",
                 "models": ["model-a"],
                 "headers": {},
-                "requiresAuth": true
+                "requiresAuth": true,
+                "toolshim": false
             });
             let payload_obj = payload.as_object_mut().unwrap();
             for (key, value) in patch.as_object().unwrap() {
@@ -633,7 +639,8 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 "apiKey": "owned-secret",
                 "models": ["model-a"],
                 "headers": {},
-                "requiresAuth": true
+                "requiresAuth": true,
+                "toolshim": false
             }),
         )
         .await
@@ -666,7 +673,8 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 "apiUrl": "https://api.example.test/v1",
                 "models": ["model-a"],
                 "headers": {},
-                "requiresAuth": false
+                "requiresAuth": false,
+                "toolshim": false
             }),
         )
         .await
@@ -688,7 +696,8 @@ fn acp_catalog_and_custom_provider_methods_use_core_provider_store() {
                 "apiKey": "owned-secret",
                 "models": ["model-a"],
                 "headers": {},
-                "requiresAuth": true
+                "requiresAuth": true,
+                "toolshim": false
             }),
         )
         .await
