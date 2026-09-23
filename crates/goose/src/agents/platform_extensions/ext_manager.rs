@@ -211,7 +211,9 @@ impl ExtensionManagerClient {
         };
 
         extension_manager
-            .add_extension(config, None, None, None)
+            // Con la sesión que lo pidió: así lo que nazca hereda su env y su
+            // identidad (`ghosty/sandbox`) en vez de correr como root.
+            .add_extension(config, None, None, Some(session_id))
             .await
             .map(|_| {
                 vec![ContentBlock::text(format!(

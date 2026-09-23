@@ -8,6 +8,7 @@ use super::tool_calls::conversion::{
 use super::tool_calls::enrichment::tool_chain_summary;
 use super::*;
 use crate::session::session_env::{session_env_from_meta, set_session_env};
+use crate::session::session_sandbox::{session_sandbox_from_meta, set_session_sandbox};
 use agent_client_protocol::schema::v1::ToolCall;
 
 fn replay_audience_annotations(audience: &[Role]) -> Annotations {
@@ -388,6 +389,8 @@ impl GooseAcpAgent {
         debug!(session_id = %args.session_id.0, cwd = ?args.cwd, "load session request");
 
         let session_id_str = args.session_id.0.to_string();
+        let sandbox = session_sandbox_from_meta(args.meta.as_ref())
+            .map_err(|error| agent_client_protocol::Error::invalid_params().data(error))?;
 
         let mut session = self
             .session_manager
@@ -402,6 +405,10 @@ impl GooseAcpAgent {
         // agente para que las extensiones stdio que nazcan aquí lo vean.
         if let Some(env) = session_env_from_meta(args.meta.as_ref()) {
             set_session_env(&session_id_str, env);
+        }
+        // Igual con `ghosty/sandbox`: sin la clave se conserva el guardado.
+        if let Some(sandbox) = sandbox {
+            set_session_sandbox(&session_id_str, sandbox);
         }
 
         let cwd = effective_session_cwd(self.session_cwd.as_deref(), &args.cwd);

@@ -4,6 +4,9 @@ use crate::agents::ExtensionLoadResult;
 use crate::config::{Config, GooseMode};
 use crate::recipe::{Recipe, Settings};
 use crate::session::session_env::{remove_session_env, session_env_from_meta, set_session_env};
+use crate::session::session_sandbox::{
+    remove_session_sandbox, session_sandbox_from_meta, set_session_sandbox,
+};
 use crate::session::{ExtensionData, Session, SessionType};
 
 use super::GooseAcpAgent;
@@ -48,6 +51,9 @@ impl GooseAcpAgent {
         validate_absolute_cwd(&args.cwd)?;
         let config = Config::global();
         let session_type = session_type_from_meta(args.meta.as_ref())?;
+        // Un aislamiento pedido e inválido tumba la sesión antes de crearla.
+        let sandbox = session_sandbox_from_meta(args.meta.as_ref())
+            .map_err(|error| agent_client_protocol::Error::invalid_params().data(error))?;
         let current_mode: GooseMode = config.get_ghosty_mode().unwrap_or_default();
         let recipe = self.resolve_recipe_from_meta(args.meta.as_ref()).await?;
         let meta = new_session_meta_fields(args.meta.as_ref(), recipe.as_ref())?;
@@ -64,6 +70,9 @@ impl GooseAcpAgent {
         // Antes de activar la sesión: las extensiones stdio nacen con este env.
         if let Some(env) = session_env_from_meta(args.meta.as_ref()) {
             set_session_env(&session.id, env);
+        }
+        if let Some(sandbox) = sandbox {
+            set_session_sandbox(&session.id, sandbox);
         }
         match self
             .finish_new_session_setup(cx, config, &session, args, recipe, meta)
@@ -109,6 +118,7 @@ impl GooseAcpAgent {
 
     async fn cleanup_failed_new_session(&self, session_id: &str) {
         remove_session_env(session_id);
+        remove_session_sandbox(session_id);
         if let Err(error) = self.session_manager.delete_session(session_id).await {
             warn!(
                 session_id,

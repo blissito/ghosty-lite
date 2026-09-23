@@ -625,6 +625,12 @@ impl SummonClient {
             .map_err(|e| format!("Failed to create subagent session: {}", e))?;
 
         if !task_config.parent_session_id.is_empty() {
+            // Antes de que nazcan sus extensiones: el subagente de una
+            // conversación aislada corre con la misma identidad.
+            crate::session::session_sandbox::inherit_session_sandbox(
+                &task_config.parent_session_id,
+                &session.id,
+            );
             self.context
                 .session_manager
                 .update(&session.id)

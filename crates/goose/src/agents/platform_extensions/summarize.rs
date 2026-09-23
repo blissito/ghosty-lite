@@ -112,12 +112,26 @@ impl McpClientTrait for SummarizeClient {
             ))]));
         }
 
-        let Some(working_dir) = ctx.working_dir_str() else {
-            return Ok(CallToolResult::error(vec![ContentBlock::text(
-                "Error: working_dir is required for summarize",
-            )]));
+        // Una conversación aislada resume desde SU cwd, que debe caer en sus raíces.
+        let sandbox = crate::session::session_sandbox::session_sandbox(&ctx.session_id);
+        let working_dir = match sandbox.as_deref() {
+            Some(sandbox) => match sandbox.readable(&sandbox.cwd) {
+                Ok(cwd) => cwd,
+                Err(error) => {
+                    return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                        "Error: {error}"
+                    ))]))
+                }
+            },
+            None => {
+                let Some(working_dir) = ctx.working_dir_str() else {
+                    return Ok(CallToolResult::error(vec![ContentBlock::text(
+                        "Error: working_dir is required for summarize",
+                    )]));
+                };
+                PathBuf::from(working_dir)
+            }
         };
-        let working_dir = PathBuf::from(working_dir);
 
         let args_value = arguments
             .map(serde_json::Value::Object)
@@ -159,7 +173,16 @@ impl McpClientTrait for SummarizeClient {
                 ))]));
             }
         };
-        match execute_summarize(provider, model_config, session_id, params, &working_dir).await {
+        match execute_summarize(
+            provider,
+            model_config,
+            session_id,
+            params,
+            &working_dir,
+            sandbox.as_deref(),
+        )
+        .await
+        {
             Ok(result) => Ok(result),
             Err(msg) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Error: {}",
@@ -179,9 +202,18 @@ async fn execute_summarize(
     session_id: &str,
     params: SummarizeParams,
     working_dir: &Path,
+    sandbox: Option<&crate::session::session_sandbox::SessionSandbox>,
 ) -> Result<CallToolResult, String> {
-    let gitignore = build_gitignore(working_dir);
-    let files = collect_files(&params.paths, working_dir, &params.extensions, &gitignore)?;
+    // `collect_files` ya se queda dentro de `working_dir` y salta enlaces; con
+    // aislamiento además lee con la identidad de la sesión.
+    let collect = || {
+        let gitignore = build_gitignore(working_dir);
+        collect_files(&params.paths, working_dir, &params.extensions, &gitignore)
+    };
+    let files = match sandbox {
+        Some(sandbox) => sandbox.run_as(collect)??,
+        None => collect()?,
+    };
 
     if files.is_empty() {
         return Err("No files found matching the specified paths and extensions.".to_string());

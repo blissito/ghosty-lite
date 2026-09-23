@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::edit::resolve_path;
+use crate::session::session_sandbox::SessionSandbox;
 
 const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
 
@@ -52,8 +53,9 @@ impl ImageTool {
         &self,
         params: ImageReadParams,
         working_dir: Option<&Path>,
+        sandbox: Option<&SessionSandbox>,
     ) -> CallToolResult {
-        match load_image(&params, working_dir).await {
+        match load_image(&params, working_dir, sandbox).await {
             Ok(loaded) => {
                 let mut result = CallToolResult::success(vec![
                     visible_text(loaded.summary(&params.source)),
@@ -115,12 +117,13 @@ impl LoadedImage {
 async fn load_image(
     params: &ImageReadParams,
     working_dir: Option<&Path>,
+    sandbox: Option<&SessionSandbox>,
 ) -> Result<LoadedImage, String> {
     if params.source.trim().is_empty() {
         return Err("source cannot be empty".to_string());
     }
 
-    let bytes = load_image_bytes(&params.source, working_dir).await?;
+    let bytes = load_image_bytes(&params.source, working_dir, sandbox).await?;
     ensure_image_size(bytes.len() as u64)?;
 
     let format = image::guess_format(&bytes).map_err(|_| {
@@ -165,7 +168,11 @@ async fn load_image(
     })
 }
 
-async fn load_image_bytes(source: &str, working_dir: Option<&Path>) -> Result<Vec<u8>, String> {
+async fn load_image_bytes(
+    source: &str,
+    working_dir: Option<&Path>,
+    sandbox: Option<&SessionSandbox>,
+) -> Result<Vec<u8>, String> {
     if let Ok(url) = url::Url::parse(source) {
         match url.scheme() {
             "http" | "https" => load_url_bytes(url).await,
@@ -173,12 +180,35 @@ async fn load_image_bytes(source: &str, working_dir: Option<&Path>) -> Result<Ve
                 let path = url
                     .to_file_path()
                     .map_err(|_| "invalid file URL".to_string())?;
-                load_file_bytes(path)
+                load_local_bytes(path, sandbox)
             }
-            _ => load_file_bytes(resolve_path(source, working_dir)),
+            _ => load_local_bytes(resolve_local(source, working_dir, sandbox), sandbox),
         }
     } else {
-        load_file_bytes(resolve_path(source, working_dir))
+        load_local_bytes(resolve_local(source, working_dir, sandbox), sandbox)
+    }
+}
+
+/// En una conversación aislada las rutas relativas cuelgan de su cwd.
+fn resolve_local(
+    source: &str,
+    working_dir: Option<&Path>,
+    sandbox: Option<&SessionSandbox>,
+) -> PathBuf {
+    match sandbox {
+        Some(sandbox) => sandbox.resolve(Path::new(source)),
+        None => resolve_path(source, working_dir),
+    }
+}
+
+/// Con aislamiento sólo se lee bajo sus raíces y con su identidad.
+fn load_local_bytes(path: PathBuf, sandbox: Option<&SessionSandbox>) -> Result<Vec<u8>, String> {
+    match sandbox {
+        Some(sandbox) => {
+            let real = sandbox.readable(&path)?;
+            sandbox.run_as(|| load_file_bytes(real))?
+        }
+        None => load_file_bytes(path),
     }
 }
 
@@ -347,7 +377,7 @@ mod local_file_tests {
         let file_url = url::Url::from_file_path(&path).unwrap().to_string();
 
         for source in [path.to_string_lossy().into_owned(), file_url] {
-            let loaded = load_image(&ImageReadParams { source, crop: None }, None)
+            let loaded = load_image(&ImageReadParams { source, crop: None }, None, None)
                 .await
                 .unwrap();
 
@@ -374,6 +404,7 @@ mod local_file_tests {
                 source: path.to_string_lossy().into_owned(),
                 crop: None,
             },
+            None,
             None,
         )
         .await
@@ -522,7 +553,7 @@ mod tests {
             crop: None,
         };
 
-        let loaded = load_image(&params, None).await.unwrap();
+        let loaded = load_image(&params, None, None).await.unwrap();
         server.await.unwrap();
 
         assert_eq!(loaded.mime_type, "image/png");

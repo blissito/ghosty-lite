@@ -3,6 +3,7 @@ use crate::agents::mcp_client::{Error, McpClientTrait};
 use crate::agents::tool_execution::ToolCallContext;
 use crate::conversation::Conversation;
 use crate::session::session_manager::SessionType;
+use crate::session::session_sandbox::session_sandbox;
 use anyhow::Result;
 use async_trait::async_trait;
 use indoc::indoc;
@@ -118,11 +119,88 @@ impl ChatRecallClient {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
+    /// Búsqueda de una conversación aislada: sólo en su propio historial. El
+    /// índice compartido (`search_chat_history`) ve a todas las demás.
+    async fn search_own_session(
+        &self,
+        session_id: &str,
+        query: &str,
+        limit: usize,
+        after_date: Option<chrono::DateTime<chrono::Utc>>,
+        before_date: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<Vec<ContentBlock>, String> {
+        let session = self
+            .context
+            .session_manager
+            .get_session(session_id, true)
+            .await
+            .map_err(|e| format!("Failed to load session: {}", e))?;
+        let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+        let messages = session
+            .conversation
+            .as_ref()
+            .map(Conversation::agent_visible_messages)
+            .unwrap_or_default();
+        let matches: Vec<(String, String)> = messages
+            .iter()
+            .filter(|message| !message.is_turn_context())
+            .filter(|message| {
+                let created = chrono::DateTime::from_timestamp(message.created, 0);
+                after_date.is_none_or(|after| created.is_some_and(|c| c >= after))
+                    && before_date.is_none_or(|before| created.is_some_and(|c| c <= before))
+            })
+            .filter_map(|message| {
+                let text = message.as_concat_text();
+                let lower = text.to_lowercase();
+                terms
+                    .iter()
+                    .any(|term| lower.contains(term))
+                    .then(|| (format!("{:?}", message.role), text))
+            })
+            .collect();
+
+        if matches.is_empty() {
+            return Ok(vec![ContentBlock::text(format!(
+                "No results found for query: '{}'",
+                query
+            ))]);
+        }
+        let mut output = format!(
+            "Found {} matching message(s) in this conversation for query: '{}'\n\n",
+            matches.len(),
+            query
+        );
+        for (idx, (role, text)) in matches.iter().rev().take(limit).enumerate() {
+            output.push_str(&format!(
+                "{}. [{}]\n{}\n\n",
+                idx + 1,
+                role,
+                text.lines()
+                    .map(|line| format!("   {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ));
+        }
+        Ok(vec![agent_only_history(output)])
+    }
+
     async fn handle_chatrecall(
         &self,
         current_session_id: &str,
         arguments: Option<JsonObject>,
+    ) -> Result<Vec<ContentBlock>, String> {
+        // Una conversación aislada sólo se recuerda a sí misma.
+        let sandboxed = session_sandbox(current_session_id).is_some();
+        self.handle_chatrecall_scoped(current_session_id, arguments, sandboxed)
+            .await
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn handle_chatrecall_scoped(
+        &self,
+        current_session_id: &str,
+        arguments: Option<JsonObject>,
+        sandboxed: bool,
     ) -> Result<Vec<ContentBlock>, String> {
         let arguments = arguments.ok_or("Missing arguments")?;
 
@@ -132,6 +210,11 @@ impl ChatRecallClient {
             .map(|s| s.to_string());
 
         if let Some(sid) = target_session_id {
+            if sandboxed && sid != current_session_id {
+                return Err(
+                    "Esta conversación sólo puede consultar su propio historial.".to_string(),
+                );
+            }
             // LOAD MODE: Get session summary (first and last few messages)
             match self.context.session_manager.get_session(&sid, true).await {
                 Ok(loaded_session) => {
@@ -193,6 +276,12 @@ impl ChatRecallClient {
                 .and_then(|v| v.as_str())
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                 .map(|dt| dt.with_timezone(&chrono::Utc));
+
+            if sandboxed {
+                return self
+                    .search_own_session(current_session_id, &query, limit, after_date, before_date)
+                    .await;
+            }
 
             let exclude_session_id = Some(current_session_id.to_string());
 
@@ -477,5 +566,73 @@ mod tests {
                 .contains("agent-only secret marker"));
             assert!(!projected_tool_text(output, Role::User).contains("agent-only secret marker"));
         }
+    }
+
+    #[tokio::test]
+    async fn sandboxed_session_only_recalls_itself() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let session_manager = Arc::new(SessionManager::new(temp_dir.path().to_path_buf()));
+        let mut ids = Vec::new();
+        for (name, text) in [
+            ("mine", "mi pedido de tacos"),
+            ("other", "el pedido de tacos del vecino"),
+        ] {
+            let session = session_manager
+                .create_session(
+                    temp_dir.path().to_path_buf(),
+                    name.to_string(),
+                    SessionType::User,
+                    GooseMode::default(),
+                )
+                .await
+                .unwrap();
+            session_manager
+                .add_message(&session.id, &Message::user().with_text(text))
+                .await
+                .unwrap();
+            ids.push(session.id);
+        }
+        let (mine, other) = (ids[0].clone(), ids[1].clone());
+        // Los ids de sesión (`AAAAMMDD_N`) se repiten entre tests con DB propia,
+        // así que aquí no se toca el registro global: se pide el modo aislado.
+
+        let client = ChatRecallClient::new(PlatformExtensionContext {
+            extension_manager: None,
+            session_manager,
+            scheduler: None,
+            session: None,
+            use_login_shell_path: false,
+        })
+        .unwrap();
+        let args = |value: serde_json::Value| Some(value.as_object().unwrap().clone());
+
+        let denied = client
+            .handle_chatrecall_scoped(
+                &mine,
+                args(serde_json::json!({ "session_id": other })),
+                true,
+            )
+            .await
+            .unwrap_err();
+        assert!(denied.contains("propio historial"), "{denied}");
+        assert!(client
+            .handle_chatrecall_scoped(&mine, args(serde_json::json!({ "session_id": mine })), true)
+            .await
+            .is_ok());
+
+        let search = client
+            .handle_chatrecall_scoped(&mine, args(serde_json::json!({ "query": "tacos" })), true)
+            .await
+            .unwrap();
+        let text = projected_tool_text(search, Role::Assistant);
+        assert!(text.contains("mi pedido de tacos"), "{text}");
+        assert!(!text.contains("vecino"), "{text}");
+
+        // Sin aislamiento, la otra sesión sigue viendo el índice compartido.
+        let search = client
+            .handle_chatrecall_scoped(&other, args(serde_json::json!({ "query": "tacos" })), false)
+            .await
+            .unwrap();
+        assert!(projected_tool_text(search, Role::Assistant).contains("mi pedido de tacos"));
     }
 }

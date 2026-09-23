@@ -429,6 +429,19 @@ struct ResolvedTool {
     resource_uri: Option<String>,
 }
 
+/// Extensiones que actúan sobre OTRAS sesiones (verlas, escribirles, crearlas o
+/// programar corridas que nacen sin identidad): una conversación aislada no las
+/// usa.
+fn denied_to_sandboxed_session(session_id: &str, extension_name: &str) -> bool {
+    [
+        crate::agents::platform_extensions::orchestrator::EXTENSION_NAME,
+        crate::agents::platform_extensions::scheduler::EXTENSION_NAME,
+    ]
+    .iter()
+    .any(|denied| name_to_key(denied) == extension_name)
+        && crate::session::session_sandbox::session_sandbox(session_id).is_some()
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn child_process_client(
     mut command: Command,
@@ -1662,6 +1675,34 @@ impl ExtensionManager {
                         )
                         .await?;
                         Box::new(client)
+                    } else if let Some(sandbox) = self.session_sandbox_for(session_id) {
+                        // Una conversación aislada no corre builtins dentro del
+                        // proceso root (computercontroller trae shell y archivos;
+                        // memory, un directorio común): van como `ghosty mcp
+                        // <nombre>` aparte, con su identidad.
+                        let exe = std::env::current_exe().map_err(|error| {
+                            ExtensionError::SetupError(format!(
+                                "no se encontró el binario para correr {name}: {error}"
+                            ))
+                        })?;
+                        let command = Command::new(exe).configure(|command| {
+                            command.arg("mcp").arg(&normalized_name);
+                            #[cfg(unix)]
+                            sandbox.apply_identity(command);
+                        });
+                        let client = child_process_client(
+                            command,
+                            &Some(timeout_secs),
+                            self.provider.clone(),
+                            &sandbox.cwd,
+                            None,
+                            self.client_name.clone(),
+                            self.mcp_client_capabilities(),
+                            self.context.session_manager.action_required(),
+                            Arc::downgrade(self),
+                        )
+                        .await?;
+                        Box::new(client)
                     } else {
                         let (server_read, client_write) = tokio::io::duplex(65536);
                         let (client_read, server_write) = tokio::io::duplex(65536);
@@ -1695,9 +1736,21 @@ impl ExtensionManager {
                 let config = Config::global();
                 let mut all_envs =
                     merge_environments(envs, env_keys, &sanitized_name, config).await?;
+                // Toda extensión stdio que nace para una conversación aislada
+                // corre con su uid/gid/HOME, SALVO el MCP del propio relé: se
+                // reconoce porque SU config (no el `ghosty/env` de la sesión,
+                // que aún no se mezcla) trae `GHOSTY_SESSION`. Ése se queda
+                // root para que el agente, con otro uid y `/proc` en hidepid,
+                // no pueda leer su environ ni su token.
+                let sandbox = if all_envs.contains_key("GHOSTY_SESSION") {
+                    None
+                } else {
+                    self.session_sandbox_for(session_id)
+                };
                 let process_working_dir = cwd
                     .as_deref()
                     .map(PathBuf::from)
+                    .or_else(|| sandbox.as_ref().map(|sandbox| sandbox.cwd.clone()))
                     .unwrap_or_else(|| effective_working_dir.clone());
 
                 if let Some(sid) = session_id {
@@ -1717,6 +1770,11 @@ impl ExtensionManager {
                     );
                     Command::new("docker").configure(|command| {
                         command.arg("exec").arg("-i");
+                        if let Some(sandbox) = &sandbox {
+                            command
+                                .arg("--user")
+                                .arg(format!("{}:{}", sandbox.uid, sandbox.gid));
+                        }
                         for (key, value) in &all_envs {
                             command.arg("-e").arg(format!("{}={}", key, value));
                         }
@@ -1728,6 +1786,10 @@ impl ExtensionManager {
                     let cmd = resolve_command(cmd);
                     Command::new(cmd).configure(|command| {
                         command.args(args).envs(all_envs);
+                        #[cfg(unix)]
+                        if let Some(sandbox) = &sandbox {
+                            sandbox.apply_identity(command);
+                        }
                     })
                 };
 
@@ -1758,6 +1820,22 @@ impl ExtensionManager {
         self.invalidate_tools_cache_and_bump_version().await;
 
         Ok(())
+    }
+
+    /// Identidad de la conversación para la que nace una extensión: la sesión
+    /// explícita o, si no viene, la del agente.
+    fn session_sandbox_for(
+        &self,
+        session_id: Option<&str>,
+    ) -> Option<Arc<crate::session::session_sandbox::SessionSandbox>> {
+        match session_id {
+            Some(id) => crate::session::session_sandbox::session_sandbox(id),
+            None => {
+                self.context.session.as_ref().and_then(|session| {
+                    crate::session::session_sandbox::session_sandbox(&session.id)
+                })
+            }
+        }
     }
 
     pub async fn add_client(
@@ -2450,6 +2528,17 @@ impl ExtensionManager {
             )
             .await?;
 
+        if denied_to_sandboxed_session(&ctx.session_id, &resolved.extension_name) {
+            return Err(ErrorData::new(
+                ErrorCode::INVALID_REQUEST,
+                format!(
+                    "La extensión '{}' no está disponible en una conversación aislada.",
+                    resolved.extension_name
+                ),
+                None,
+            ));
+        }
+
         if let Some(extension) = self.extensions.lock().await.get(&resolved.extension_name) {
             if !extension
                 .config
@@ -2957,6 +3046,30 @@ mod tests {
     use rmcp::model::ServerNotification;
 
     use tokio::sync::mpsc;
+
+    #[test]
+    fn sandboxed_sessions_cannot_reach_other_sessions() {
+        use crate::session::session_sandbox::{
+            remove_session_sandbox, set_session_sandbox, SessionSandbox,
+        };
+        let session_id = "extension-manager-sandbox-deny";
+        assert!(!denied_to_sandboxed_session(session_id, "orchestrator"));
+        set_session_sandbox(
+            session_id,
+            SessionSandbox {
+                uid: 20001,
+                gid: 20001,
+                home: "/h".into(),
+                cwd: "/h".into(),
+                read: vec![],
+                write: vec![],
+            },
+        );
+        assert!(denied_to_sandboxed_session(session_id, "orchestrator"));
+        assert!(denied_to_sandboxed_session(session_id, "scheduler"));
+        assert!(!denied_to_sandboxed_session(session_id, "developer"));
+        remove_session_sandbox(session_id);
+    }
 
     impl ExtensionManager {
         async fn add_mock_extension(&self, name: String, client: McpClientBox) {

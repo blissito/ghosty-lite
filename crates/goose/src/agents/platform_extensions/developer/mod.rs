@@ -7,6 +7,7 @@ pub mod tree;
 use crate::agents::extension::PlatformExtensionContext;
 use crate::agents::mcp_client::{Error, McpClientTrait};
 use crate::agents::ToolCallContext;
+use crate::session::session_sandbox::{session_sandbox, SessionSandbox};
 use anyhow::Result;
 use async_trait::async_trait;
 use edit::{EditTools, FileEditParams, FileWriteParams};
@@ -19,6 +20,7 @@ use rmcp::model::{
 use schemars::{schema_for, JsonSchema};
 use serde_json::Value;
 use shell::{shell_display_name, ShellOutput, ShellParams, ShellTool};
+use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tree::{TreeParams, TreeTool};
@@ -103,6 +105,26 @@ impl DeveloperClient {
             .map(Value::Object)
             .ok_or_else(|| "Missing arguments".to_string())?;
         serde_json::from_value(value).map_err(|e| format!("Failed to parse arguments: {e}"))
+    }
+
+    /// `write`/`edit`/`tree` de una conversación aislada: la ruta se comprueba
+    /// contra sus raíces (enlaces resueltos) y la E/S corre con su identidad.
+    /// A la tool se le pasa la ruta real, así que ya no depende del cwd.
+    fn confined(
+        sandbox: &SessionSandbox,
+        path: &str,
+        write: bool,
+        run: impl FnOnce(String, &Path) -> CallToolResult,
+    ) -> CallToolResult {
+        let checked = if write {
+            sandbox.writable(Path::new(path))
+        } else {
+            sandbox.readable(Path::new(path))
+        };
+        let result = checked.and_then(|real| {
+            sandbox.run_as(|| run(real.to_string_lossy().into_owned(), &sandbox.cwd))
+        });
+        result.unwrap_or_else(|error| CallToolResult::error(vec![visible_text(error)]))
     }
 
     pub(crate) fn get_tools() -> Vec<Tool> {
@@ -209,6 +231,7 @@ impl McpClientTrait for DeveloperClient {
         cancel_token: CancellationToken,
     ) -> Result<CallToolResult, Error> {
         let working_dir = ctx.working_dir.as_deref();
+        let sandbox = session_sandbox(&ctx.session_id);
         match name {
             "shell" => match Self::parse_args::<ShellParams>(arguments) {
                 Ok(params) => Ok(self
@@ -224,19 +247,56 @@ impl McpClientTrait for DeveloperClient {
                 Err(error) => Ok(ShellTool::error_result(&format!("Error: {error}"), None)),
             },
             "write" => match Self::parse_args::<FileWriteParams>(arguments) {
-                Ok(params) => Ok(self.edit_tools.file_write_with_cwd(params, working_dir)),
+                Ok(params) => Ok(match sandbox.as_deref() {
+                    Some(sandbox) => {
+                        let FileWriteParams { path, content } = params;
+                        Self::confined(sandbox, &path, true, |path, cwd| {
+                            self.edit_tools
+                                .file_write_with_cwd(FileWriteParams { path, content }, Some(cwd))
+                        })
+                    }
+                    None => self.edit_tools.file_write_with_cwd(params, working_dir),
+                }),
                 Err(error) => Ok(CallToolResult::error(vec![visible_text(format!(
                     "Error: {error}"
                 ))])),
             },
             "edit" => match Self::parse_args::<FileEditParams>(arguments) {
-                Ok(params) => Ok(self.edit_tools.file_edit_with_cwd(params, working_dir)),
+                Ok(params) => Ok(match sandbox.as_deref() {
+                    Some(sandbox) => {
+                        let FileEditParams {
+                            path,
+                            before,
+                            after,
+                        } = params;
+                        Self::confined(sandbox, &path, true, |path, cwd| {
+                            self.edit_tools.file_edit_with_cwd(
+                                FileEditParams {
+                                    path,
+                                    before,
+                                    after,
+                                },
+                                Some(cwd),
+                            )
+                        })
+                    }
+                    None => self.edit_tools.file_edit_with_cwd(params, working_dir),
+                }),
                 Err(error) => Ok(CallToolResult::error(vec![visible_text(format!(
                     "Error: {error}"
                 ))])),
             },
             "tree" => match Self::parse_args::<TreeParams>(arguments) {
-                Ok(params) => Ok(self.tree_tool.tree_with_cwd(params, working_dir)),
+                Ok(params) => Ok(match sandbox.as_deref() {
+                    Some(sandbox) => {
+                        let TreeParams { path, depth } = params;
+                        Self::confined(sandbox, &path, false, |path, cwd| {
+                            self.tree_tool
+                                .tree_with_cwd(TreeParams { path, depth }, Some(cwd))
+                        })
+                    }
+                    None => self.tree_tool.tree_with_cwd(params, working_dir),
+                }),
                 Err(error) => Ok(CallToolResult::error(vec![visible_text(format!(
                     "Error: {error}"
                 ))])),
@@ -244,7 +304,7 @@ impl McpClientTrait for DeveloperClient {
             "read_image" => match Self::parse_args::<ImageReadParams>(arguments) {
                 Ok(params) => Ok(self
                     .image_tool
-                    .image_read_with_cwd(params, working_dir)
+                    .image_read_with_cwd(params, working_dir, sandbox.as_deref())
                     .await),
                 Err(error) => Ok(CallToolResult::error(vec![visible_text(format!(
                     "Error: {error}"
@@ -401,5 +461,114 @@ mod tests {
         let observed = std::fs::canonicalize(first_text(&result)).unwrap();
         let expected = std::fs::canonicalize(&cwd).unwrap();
         assert_eq!(observed, expected);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn sandboxed_file_tools_stay_inside_their_roots() {
+        use crate::session::session_sandbox::{
+            remove_session_sandbox, set_session_sandbox, SessionSandbox,
+        };
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        for dir in ["own/work", "kb", "other"] {
+            fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        fs::write(root.join("kb/faq.md"), "faq").unwrap();
+        fs::write(root.join("other/secret.txt"), "secret").unwrap();
+        std::os::unix::fs::symlink(root.join("other"), root.join("own/escape")).unwrap();
+
+        let session_id = "developer-sandbox-session";
+        set_session_sandbox(
+            session_id,
+            SessionSandbox {
+                uid: 20001,
+                gid: 20001,
+                home: root.join("own"),
+                cwd: root.join("own/work"),
+                read: vec![root.join("kb")],
+                write: vec![root.join("own")],
+            },
+        );
+        let client = DeveloperClient::new(test_context(root.join("sessions"))).unwrap();
+        // El cwd de la sesión apunta al directorio compartido; no debe usarse.
+        let ctx = ToolCallContext::new(session_id.to_owned(), Some(root.join("other")), None);
+        let call = |name: &'static str, args: JsonObject| {
+            let client = &client;
+            let ctx = &ctx;
+            async move {
+                client
+                    .call_tool(ctx, name, Some(args), CancellationToken::new())
+                    .await
+                    .unwrap()
+            }
+        };
+
+        // Dentro de `write`: se escribe y se edita, relativo al cwd de la identidad.
+        let write = call("write", object!({ "path": "notes.txt", "content": "hola" })).await;
+        assert_eq!(write.is_error, Some(false), "{}", first_text(&write));
+        assert_eq!(
+            fs::read_to_string(root.join("own/work/notes.txt")).unwrap(),
+            "hola"
+        );
+        let edit = call(
+            "edit",
+            object!({ "path": "notes.txt", "before": "hola", "after": "adiós" }),
+        )
+        .await;
+        assert_eq!(edit.is_error, Some(false), "{}", first_text(&edit));
+
+        // Fuera de `write`, aunque sea legible: negado.
+        for path in [
+            root.join("kb/faq.md"),
+            root.join("other/new.txt"),
+            root.join("own/escape/secret.txt"),
+        ] {
+            let path = path.to_string_lossy().into_owned();
+            let result = call("write", object!({ "path": path.clone(), "content": "x" })).await;
+            assert_eq!(result.is_error, Some(true), "{path}");
+            assert!(first_text(&result).starts_with("Acceso denegado"), "{path}");
+        }
+        assert_eq!(fs::read_to_string(root.join("kb/faq.md")).unwrap(), "faq");
+        assert!(!root.join("other/new.txt").exists());
+        let edit = call(
+            "edit",
+            object!({
+                "path": root.join("other/secret.txt").to_string_lossy(),
+                "before": "secret",
+                "after": "pwned"
+            }),
+        )
+        .await;
+        assert_eq!(edit.is_error, Some(true));
+        assert_eq!(
+            fs::read_to_string(root.join("other/secret.txt")).unwrap(),
+            "secret"
+        );
+
+        // Lectura: `read ∪ write` sí; otra conversación, ni directo ni por enlace.
+        let tree = call(
+            "tree",
+            object!({ "path": root.join("kb").to_string_lossy() }),
+        )
+        .await;
+        assert_eq!(tree.is_error, Some(false), "{}", first_text(&tree));
+        for path in [root.join("other"), root.join("own/escape"), "/etc".into()] {
+            let result = call("tree", object!({ "path": path.to_string_lossy() })).await;
+            assert_eq!(result.is_error, Some(true), "{}", path.display());
+        }
+        let image = call(
+            "read_image",
+            object!({ "source": root.join("own/escape/secret.txt").to_string_lossy() }),
+        )
+        .await;
+        assert!(
+            first_text(&image).contains("Acceso denegado"),
+            "{}",
+            first_text(&image)
+        );
+
+        remove_session_sandbox(session_id);
     }
 }

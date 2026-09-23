@@ -2583,6 +2583,7 @@ impl GooseAcpAgent {
         sessions.remove(session_id);
         drop(sessions);
         crate::session::session_env::remove_session_env(session_id);
+        crate::session::session_sandbox::remove_session_sandbox(session_id);
 
         self.agent_manager
             .remove_session_if_loaded(session_id)

@@ -1284,3 +1284,90 @@ fn test_ghosty_env_is_per_session_replaced_on_load_and_removed_on_close() {
         assert_eq!(session_env(&session_b)["GS_TOOLS_TOKEN"], "token-b");
     });
 }
+
+fn ghosty_sandbox_meta(uid: u32, dir: &Path) -> serde_json::Map<String, serde_json::Value> {
+    let dir = dir.to_string_lossy();
+    let mut meta = serde_json::Map::new();
+    meta.insert(
+        "ghosty/sandbox".to_string(),
+        serde_json::json!({
+            "uid": uid, "gid": uid, "home": dir, "cwd": dir, "read": [], "write": [dir],
+        }),
+    );
+    meta
+}
+
+#[test]
+fn test_ghosty_sandbox_is_per_session_replaced_on_load_and_removed_on_close() {
+    use goose::session::session_sandbox::session_sandbox;
+
+    run_test(async {
+        let data_root = tempfile::tempdir().unwrap();
+        let conn = new_connection(data_root.path()).await;
+        let work_dir = tempfile::tempdir().unwrap();
+
+        let session_a = new_session_with_meta(
+            &conn,
+            work_dir.path(),
+            ghosty_sandbox_meta(20001, work_dir.path()),
+        )
+        .await
+        .unwrap();
+        let session_b = new_session_with_meta(
+            &conn,
+            work_dir.path(),
+            ghosty_sandbox_meta(20002, work_dir.path()),
+        )
+        .await
+        .unwrap();
+        let plain = new_session_with_meta(&conn, work_dir.path(), serde_json::Map::new())
+            .await
+            .unwrap();
+
+        assert_eq!(session_sandbox(&session_a).unwrap().uid, 20001);
+        assert_eq!(session_sandbox(&session_b).unwrap().uid, 20002);
+        assert!(session_sandbox(&plain).is_none());
+
+        // Pedido e inválido: ni se crea la sesión.
+        let error = new_session_with_meta(
+            &conn,
+            work_dir.path(),
+            ghosty_sandbox_meta(0, work_dir.path()),
+        )
+        .await
+        .unwrap_err();
+        assert_invalid_params(error);
+
+        conn.cx()
+            .send_request(
+                LoadSessionRequest::new(session_a.clone(), work_dir.path())
+                    .meta(ghosty_sandbox_meta(20003, work_dir.path())),
+            )
+            .block_task()
+            .await
+            .unwrap();
+        assert_eq!(session_sandbox(&session_a).unwrap().uid, 20003);
+
+        let error = conn
+            .cx()
+            .send_request(
+                LoadSessionRequest::new(session_a.clone(), work_dir.path())
+                    .meta(ghosty_sandbox_meta(19999, work_dir.path())),
+            )
+            .block_task()
+            .await
+            .unwrap_err();
+        assert_invalid_params(error.into());
+        assert_eq!(session_sandbox(&session_a).unwrap().uid, 20003);
+
+        conn.close_session(&session_a).await.unwrap();
+        assert!(session_sandbox(&session_a).is_none());
+        assert_eq!(session_sandbox(&session_b).unwrap().uid, 20002);
+
+        // Los ids se repiten entre tests (cada uno con su DB): no dejar nada
+        // en el registro global.
+        conn.close_session(&session_b).await.unwrap();
+        conn.close_session(&plain).await.unwrap();
+        assert!(session_sandbox(&session_b).is_none());
+    });
+}

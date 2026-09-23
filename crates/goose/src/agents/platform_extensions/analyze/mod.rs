@@ -248,8 +248,27 @@ impl McpClientTrait for AnalyzeClient {
         match name {
             "analyze" => match Self::parse_args::<AnalyzeParams>(arguments) {
                 Ok(params) => {
-                    let path = Self::resolve_path(&params.path, working_dir);
-                    Ok(self.analyze(params, path))
+                    // Conversación aislada: sólo bajo sus raíces y con su identidad.
+                    // Ojo: en modo directorio los archivos se leen en hilos de
+                    // rayon, que no heredan la identidad; ahí protege que el
+                    // recorrido no sigue enlaces y no sale de la raíz comprobada.
+                    let sandbox = crate::session::session_sandbox::session_sandbox(&ctx.session_id);
+                    match sandbox.as_deref() {
+                        Some(sandbox) => {
+                            let result = sandbox
+                                .readable(Path::new(&params.path))
+                                .and_then(|path| sandbox.run_as(|| self.analyze(params, path)));
+                            Ok(result.unwrap_or_else(|error| {
+                                CallToolResult::error(vec![ContentBlock::text(format!(
+                                    "Error: {error}"
+                                ))])
+                            }))
+                        }
+                        None => {
+                            let path = Self::resolve_path(&params.path, working_dir);
+                            Ok(self.analyze(params, path))
+                        }
+                    }
                 }
                 Err(error) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                     "Error: {error}"

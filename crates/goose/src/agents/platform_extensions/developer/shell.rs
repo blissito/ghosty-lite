@@ -21,6 +21,7 @@ use tokio_stream::{wrappers::SplitStream, StreamExt};
 use tokio_util::sync::CancellationToken;
 
 use crate::agents::tool_execution::ToolCallNotificationEmitter;
+use crate::session::session_sandbox::{session_sandbox, SessionSandbox};
 use crate::subprocess::SubprocessExt;
 
 pub use super::shell_output_streaming::{
@@ -424,7 +425,16 @@ impl ShellTool {
         // Derive stdout, stderr, and interleaved display from the single tagged-line buffer
         let (raw_stdout, raw_stderr, interleaved) = split_lines(&execution.lines);
 
-        let output_dir = self.output_dir.path();
+        // Con aislamiento, la salida completa se guarda en la home de la sesión y
+        // con su identidad: el tempdir de root no lo podría leer su shell.
+        let sandbox = session_id.and_then(session_sandbox);
+        let sandbox_output_dir = sandbox
+            .as_ref()
+            .map(|sandbox| sandbox.home.join(".ghosty").join("shell-output"));
+        let output_dir = sandbox_output_dir
+            .as_deref()
+            .unwrap_or_else(|| self.output_dir.path());
+        let sandbox = sandbox.as_deref();
         let slot = self.call_index.fetch_add(1, Ordering::Relaxed) % OUTPUT_SLOTS;
         let stdout_result = if raw_stdout.is_empty() {
             TruncateResult {
@@ -432,7 +442,9 @@ impl ShellTool {
                 truncation: None,
             }
         } else {
-            match truncate_output(&raw_stdout, &format!("stdout-{slot}"), output_dir) {
+            match as_session(sandbox, || {
+                truncate_output(&raw_stdout, &format!("stdout-{slot}"), output_dir)
+            }) {
                 Ok(r) => r,
                 Err(error) => return Self::error_result(&error, None),
             }
@@ -443,7 +455,9 @@ impl ShellTool {
                 truncation: None,
             }
         } else {
-            match truncate_output(&raw_stderr, &format!("stderr-{slot}"), output_dir) {
+            match as_session(sandbox, || {
+                truncate_output(&raw_stderr, &format!("stderr-{slot}"), output_dir)
+            }) {
                 Ok(r) => r,
                 Err(error) => return Self::error_result(&error, None),
             }
@@ -458,8 +472,9 @@ impl ShellTool {
             output_collection_error: execution.output_collection_error.clone(),
         };
         let structured_content = serde_json::to_value(&shell_output).ok();
-        let render_result = match render_output(&interleaved, &format!("output-{slot}"), output_dir)
-        {
+        let render_result = match as_session(sandbox, || {
+            render_output(&interleaved, &format!("output-{slot}"), output_dir)
+        }) {
             Ok(r) => r,
             Err(error) => return Self::error_result(&error, None),
         };
@@ -546,6 +561,17 @@ struct ExecutionOutput {
     output_collection_error: Option<String>,
 }
 
+/// Corre `f` con la identidad de la sesión si tiene aislamiento.
+fn as_session<T>(
+    sandbox: Option<&SessionSandbox>,
+    f: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    match sandbox {
+        Some(sandbox) => sandbox.run_as(f)?,
+        None => f(),
+    }
+}
+
 fn resolve_shell_timeout(timeout_secs: Option<u64>) -> u64 {
     timeout_secs.unwrap_or_else(|| {
         crate::config::Config::global()
@@ -564,6 +590,15 @@ async fn run_command(
     cancellation_token: CancellationToken,
 ) -> Result<ExecutionOutput, String> {
     let timeout_secs = Some(resolve_shell_timeout(timeout_secs));
+
+    // flatpak-spawn corre en el host: ahí no hay cómo aplicar el uid de la sesión.
+    #[cfg(not(windows))]
+    if is_flatpak() && session_id.and_then(session_sandbox).is_some() {
+        return Err(
+            "Esta conversación está aislada y el shell no puede correr fuera de ella (Flatpak)."
+                .to_string(),
+        );
+    }
 
     let mut command = build_shell_command(command_line, working_dir, login_path, session_id);
 
@@ -738,6 +773,12 @@ fn build_shell_command(
                 command.env("PATH", path);
             }
             apply_session_environment(&mut command, session_id);
+            // Conversación aislada: su uid/gid, su HOME y siempre su cwd (el
+            // de la sesión puede ser un directorio compartido).
+            if let Some(sandbox) = session_id.and_then(session_sandbox) {
+                sandbox.apply_identity(&mut command);
+                command.current_dir(&sandbox.cwd);
+            }
             command
         }
     };
@@ -948,6 +989,8 @@ fn save_full_output(
     output_dir: &std::path::Path,
 ) -> Result<PathBuf, String> {
     let path = output_dir.join(label);
+    std::fs::create_dir_all(output_dir)
+        .map_err(|e| format!("Failed to create output directory: {e}"))?;
     std::fs::write(&path, output).map_err(|e| format!("Failed to write output buffer: {e}"))?;
     Ok(path)
 }
@@ -1108,6 +1151,78 @@ mod tests {
             );
             remove_session_env(session_id);
         }
+    }
+
+    #[cfg(not(windows))]
+    fn sandbox_for_test(root: &std::path::Path, uid: u32) -> SessionSandbox {
+        SessionSandbox {
+            uid,
+            gid: uid,
+            home: root.join("home"),
+            cwd: root.join("work"),
+            read: vec![],
+            write: vec![root.to_path_buf()],
+        }
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn sandboxed_shell_command_gets_its_home_and_cwd() {
+        use crate::session::session_sandbox::{remove_session_sandbox, set_session_sandbox};
+
+        let temp = tempfile::tempdir().unwrap();
+        let session_id = "shell-sandbox-config-session";
+        let sandbox = sandbox_for_test(temp.path(), 20001);
+        set_session_sandbox(session_id, sandbox.clone());
+
+        // El cwd de la sesión (compartido) se ignora: manda el de la identidad.
+        let shared = temp.path().join("shared");
+        let command = build_shell_command("true", Some(&shared), None, Some(session_id));
+        let std_command = command.as_std();
+        assert_eq!(std_command.get_current_dir(), Some(sandbox.cwd.as_path()));
+        let home = std_command
+            .get_envs()
+            .find(|(key, _)| *key == "HOME")
+            .and_then(|(_, value)| value);
+        assert_eq!(home, Some(sandbox.home.as_os_str()));
+
+        // Sin identidad todo sigue igual.
+        let command = build_shell_command("true", Some(&shared), None, Some("no-sandbox"));
+        assert_eq!(command.as_std().get_current_dir(), Some(shared.as_path()));
+        remove_session_sandbox(session_id);
+    }
+
+    /// Sólo como root se puede comprobar el cambio real de uid; fuera de root
+    /// (la suite normal) se salta.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn sandboxed_shell_runs_as_the_session_uid() {
+        use crate::session::session_sandbox::{remove_session_sandbox, set_session_sandbox};
+
+        if unsafe { libc::geteuid() } != 0 {
+            eprintln!("se salta: hace falta root para cambiar de uid");
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let session_id = "shell-sandbox-uid-session";
+        let sandbox = sandbox_for_test(temp.path(), 20001);
+        for dir in [&sandbox.home, &sandbox.cwd] {
+            std::fs::create_dir_all(dir).unwrap();
+            std::os::unix::fs::chown(dir, Some(20001), Some(20001)).unwrap();
+        }
+        std::os::unix::fs::chown(temp.path(), Some(20001), Some(20001)).unwrap();
+        set_session_sandbox(session_id, sandbox);
+
+        let output =
+            build_shell_command("id -u; id -g; id -G; umask", None, None, Some(session_id))
+                .output()
+                .await
+                .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let lines: Vec<&str> = stdout.lines().collect();
+        assert_eq!(lines[..3], ["20001", "20001", "20001"], "{stdout}");
+        assert_eq!(lines[3], "0077");
+        remove_session_sandbox(session_id);
     }
 
     #[cfg(not(windows))]
