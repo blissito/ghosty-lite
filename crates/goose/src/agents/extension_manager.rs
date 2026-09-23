@@ -1675,7 +1675,9 @@ impl ExtensionManager {
                         )
                         .await?;
                         Box::new(client)
-                    } else if let Some(sandbox) = self.session_sandbox_for(session_id) {
+                    } else if let Some((sandbox_session, sandbox)) =
+                        self.session_sandbox_for(session_id)
+                    {
                         // Una conversación aislada no corre builtins dentro del
                         // proceso root (computercontroller trae shell y archivos;
                         // memory, un directorio común): van como `ghosty mcp
@@ -1688,7 +1690,7 @@ impl ExtensionManager {
                         let command = Command::new(exe).configure(|command| {
                             command.arg("mcp").arg(&normalized_name);
                             #[cfg(unix)]
-                            sandbox.apply_identity(command);
+                            sandbox.apply_identity(command, Some(&sandbox_session));
                         });
                         let client = child_process_client(
                             command,
@@ -1750,7 +1752,7 @@ impl ExtensionManager {
                 let process_working_dir = cwd
                     .as_deref()
                     .map(PathBuf::from)
-                    .or_else(|| sandbox.as_ref().map(|sandbox| sandbox.cwd.clone()))
+                    .or_else(|| sandbox.as_ref().map(|(_, sandbox)| sandbox.cwd.clone()))
                     .unwrap_or_else(|| effective_working_dir.clone());
 
                 if let Some(sid) = session_id {
@@ -1770,7 +1772,7 @@ impl ExtensionManager {
                     );
                     Command::new("docker").configure(|command| {
                         command.arg("exec").arg("-i");
-                        if let Some(sandbox) = &sandbox {
+                        if let Some((_, sandbox)) = &sandbox {
                             command
                                 .arg("--user")
                                 .arg(format!("{}:{}", sandbox.uid, sandbox.gid));
@@ -1788,8 +1790,8 @@ impl ExtensionManager {
                         // La identidad limpia el env: va antes que el de la
                         // extensión y el de la sesión.
                         #[cfg(unix)]
-                        if let Some(sandbox) = &sandbox {
-                            sandbox.apply_identity(command);
+                        if let Some((sandbox_session, sandbox)) = &sandbox {
+                            sandbox.apply_identity(command, Some(sandbox_session));
                         }
                         command.args(args).envs(all_envs);
                     })
@@ -1829,15 +1831,12 @@ impl ExtensionManager {
     fn session_sandbox_for(
         &self,
         session_id: Option<&str>,
-    ) -> Option<Arc<crate::session::session_sandbox::SessionSandbox>> {
-        match session_id {
-            Some(id) => crate::session::session_sandbox::session_sandbox(id),
-            None => {
-                self.context.session.as_ref().and_then(|session| {
-                    crate::session::session_sandbox::session_sandbox(&session.id)
-                })
-            }
-        }
+    ) -> Option<(String, Arc<crate::session::session_sandbox::SessionSandbox>)> {
+        let id = match session_id {
+            Some(id) => id.to_string(),
+            None => self.context.session.as_ref()?.id.clone(),
+        };
+        crate::session::session_sandbox::session_sandbox(&id).map(|sandbox| (id, sandbox))
     }
 
     pub async fn add_client(

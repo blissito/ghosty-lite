@@ -1685,7 +1685,9 @@ fn build_acp_command(
     // demás se agrega encima.
     #[cfg(unix)]
     if let Some(identity) = identity {
-        identity.sandbox.apply_identity(&mut cmd);
+        identity
+            .sandbox
+            .apply_identity(&mut cmd, Some(&identity.session_id));
         cmd.current_dir(&identity.sandbox.cwd);
     }
     #[cfg(not(unix))]
@@ -1733,9 +1735,13 @@ async fn spawn_acp_process(
     config: &AcpProviderConfig,
     identity: Option<&HarnessIdentity>,
 ) -> Result<Child> {
-    build_acp_command(config, identity)?
-        .spawn()
-        .context("failed to spawn ACP process")
+    let spawned = build_acp_command(config, identity)?.spawn();
+    match identity {
+        Some(_) => spawned.context(
+            "no se pudo aislar el arnés de esta conversación (/tmp privado o cambio de uid)",
+        ),
+        None => spawned.context("failed to spawn ACP process"),
+    }
 }
 
 fn log_undelivered<E: std::fmt::Debug>(result: Result<(), E>, method: &str) {

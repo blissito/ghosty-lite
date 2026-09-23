@@ -606,9 +606,15 @@ async fn run_command(
     command.stderr(Stdio::piped());
     command.stdin(Stdio::null());
 
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("Failed to spawn shell command: {}", error))?;
+    let mut child = command.spawn().map_err(|error| {
+        // En una conversación aislada el fallo suele ser el aislamiento mismo
+        // (namespace, /tmp privado, cambio de uid): no se corre sin él.
+        if session_id.and_then(session_sandbox).is_some() {
+            format!("No se pudo aislar el proceso de esta conversación (/tmp privado o cambio de uid); el comando no se ejecutó: {error}")
+        } else {
+            format!("Failed to spawn shell command: {}", error)
+        }
+    })?;
 
     let child_stdout = child
         .stdout
@@ -773,7 +779,7 @@ fn build_shell_command(
             // filtrado (va primero: lo limpia) y siempre su cwd (el de la
             // sesión puede ser un directorio compartido).
             if let Some(sandbox) = session_id.and_then(session_sandbox) {
-                sandbox.apply_identity(&mut command);
+                sandbox.apply_identity(&mut command, session_id);
                 command.current_dir(&sandbox.cwd);
             }
             if let Some(path) = login_path {
@@ -1219,17 +1225,25 @@ mod tests {
             std::os::unix::fs::chown(dir, Some(20001), Some(20001)).unwrap();
         }
         std::os::unix::fs::chown(temp.path(), Some(20001), Some(20001)).unwrap();
+        let private_tmp = sandbox.private_tmp_dir(Some(session_id));
         set_session_sandbox(session_id, sandbox);
 
-        let output =
-            build_shell_command("id -u; id -g; id -G; umask", None, None, Some(session_id))
-                .output()
-                .await
-                .unwrap();
+        let output = build_shell_command(
+            "id -u; id -g; id -G; umask; touch /tmp/probe",
+            None,
+            None,
+            Some(session_id),
+        )
+        .output()
+        .await
+        .unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
         let lines: Vec<&str> = stdout.lines().collect();
         assert_eq!(lines[..3], ["20001", "20001", "20001"], "{stdout}");
         assert_eq!(lines[3], "0077");
+        // Su /tmp es el privado de la sesión, no el de la caja.
+        assert!(private_tmp.join("probe").exists(), "{stdout}");
+        assert!(!std::path::Path::new("/tmp/probe").exists());
         remove_session_sandbox(session_id);
     }
 

@@ -310,23 +310,51 @@ impl SessionSandbox {
         Ok(f())
     }
 
-    /// uid/gid, `HOME`, `umask 077` y el env de la caja FILTRADO para un
-    /// proceso que nace para la sesión. Borra el env que ya tuviera el comando:
-    /// hay que llamarla ANTES de agregarle el de la sesión (`ghosty/env`,
-    /// `AGENT_SESSION_ID`) o el de la extensión. El cwd lo pone quien llama.
+    /// uid/gid, `HOME`, `umask 077`, `/tmp` privado y el env de la caja
+    /// FILTRADO para un proceso que nace para la sesión `session_id`. Borra el
+    /// env que ya tuviera el comando: hay que llamarla ANTES de agregarle el de
+    /// la sesión (`ghosty/env`, `AGENT_SESSION_ID`) o el de la extensión. El
+    /// cwd lo pone quien llama.
     ///
-    /// Los grupos suplementarios los limpia la propia std: al cambiar de uid
-    /// siendo root sin `groups` explícitos llama `setgroups(0, NULL)` antes del
-    /// `setuid`. Un `pre_exec` no serviría para eso: corre ya sin privilegios.
+    /// En Linux como root (la caja) todo va en UN `pre_exec`, todavía como
+    /// root: namespace de montaje propio, `/tmp`, `/var/tmp` y `/dev/shm`
+    /// privados, y luego `setgroups([])`, `setgid`, `setuid` y `umask 077` a
+    /// mano ([`enter_private_namespace`]). Por eso ahí NO se usan `.uid()` /
+    /// `.gid()` de la std: los aplica antes de los `pre_exec` y después ya no
+    /// se podría montar. Si algo falla, el proceso no nace (cerrado por
+    /// defecto).
+    ///
+    /// Fuera de eso (desarrollo, tests sin root) quedan `.uid()`/`.gid()` de la
+    /// std, que limpia los grupos suplementarios antes del `setuid`, y el umask.
     #[cfg(unix)]
-    pub fn apply_identity(&self, command: &mut tokio::process::Command) {
-        command.uid(self.uid);
-        command.gid(self.gid);
+    pub fn apply_identity(&self, command: &mut tokio::process::Command, session_id: Option<&str>) {
         command.env_clear();
         command.envs(
             std::env::vars_os().filter(|(name, _)| name.to_str().is_some_and(is_inheritable_env)),
         );
         command.env("HOME", &self.home);
+
+        #[cfg(target_os = "linux")]
+        if unsafe { libc::geteuid() } == 0 {
+            let (uid, gid) = (self.uid, self.gid);
+            match self.private_mounts(session_id) {
+                Ok(binds) => unsafe {
+                    command.pre_exec(move || enter_private_namespace(&binds, uid, gid));
+                },
+                Err(error) => {
+                    tracing::error!(%error, "no se pudo preparar el /tmp privado de la sesión");
+                    // El proceso no debe nacer sin su /tmp privado.
+                    unsafe {
+                        command.pre_exec(|| Err(std::io::Error::from_raw_os_error(libc::EACCES)));
+                    }
+                }
+            }
+            return;
+        }
+
+        let _ = session_id;
+        command.uid(self.uid);
+        command.gid(self.gid);
         // SAFETY: `umask` es async-signal-safe y no toca memoria compartida.
         unsafe {
             command.pre_exec(|| {
@@ -335,6 +363,138 @@ impl SessionSandbox {
             });
         }
     }
+
+    /// Directorio que la sesión ve como `/tmp`: el `TMPDIR` de su `ghosty/env`
+    /// si cae en sus raíces de escritura (el relé manda `/data/tmp/<uid>`), si
+    /// no `<home>/.ghosty/tmp`.
+    #[cfg(unix)]
+    pub fn private_tmp_dir(&self, session_id: Option<&str>) -> PathBuf {
+        session_id
+            .map(crate::session::session_env::session_env)
+            .and_then(|env| env.get("TMPDIR").cloned())
+            .map(PathBuf::from)
+            .filter(|dir| dir.is_absolute())
+            .and_then(|dir| self.writable(&dir).ok())
+            .unwrap_or_else(|| self.home.join(".ghosty").join("tmp"))
+    }
+
+    /// Pares (origen, destino) a montar con `MS_BIND` en el hijo. Los
+    /// directorios de origen se crean aquí, en el padre (como root), a nombre
+    /// del uid de la sesión y 0700; en el hijo sólo hay syscalls.
+    #[cfg(unix)]
+    pub fn private_mounts(
+        &self,
+        session_id: Option<&str>,
+    ) -> std::io::Result<Vec<(std::ffi::CString, std::ffi::CString)>> {
+        let tmp = self.private_tmp_dir(session_id);
+        self.ensure_private_dir(&tmp)?;
+        let mut binds = vec![(tmp.clone(), PathBuf::from("/tmp"))];
+        if Path::new("/var/tmp").is_dir() {
+            binds.push((tmp, PathBuf::from("/var/tmp")));
+        }
+        if Path::new("/dev/shm").is_dir() {
+            let shm = self.home.join(".ghosty").join("shm");
+            self.ensure_private_dir(&shm)?;
+            binds.push((shm, PathBuf::from("/dev/shm")));
+        }
+        binds
+            .into_iter()
+            .map(|(source, target)| Ok((path_to_cstring(&source)?, path_to_cstring(&target)?)))
+            .collect()
+    }
+
+    /// Crea `dir` (y los padres que falten) a nombre de la sesión, 0700. Lo que
+    /// ya existe no se toca: lo creó el relé.
+    #[cfg(unix)]
+    fn ensure_private_dir(&self, dir: &Path) -> std::io::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        let mut missing = Vec::new();
+        let mut current = dir;
+        while !current.exists() {
+            missing.push(current.to_path_buf());
+            match current.parent() {
+                Some(parent) => current = parent,
+                None => break,
+            }
+        }
+        let is_root = unsafe { libc::geteuid() } == 0;
+        for created in missing.iter().rev() {
+            std::fs::create_dir(created).or_else(|error| {
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            })?;
+            if is_root {
+                std::os::unix::fs::chown(created, Some(self.uid), Some(self.gid))?;
+            }
+            std::fs::set_permissions(created, std::fs::Permissions::from_mode(0o700))?;
+        }
+        if !dir.is_dir() {
+            return Err(std::io::Error::other(format!(
+                "{} no es un directorio",
+                dir.display()
+            )));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+fn path_to_cstring(path: &Path) -> std::io::Result<std::ffi::CString> {
+    use std::os::unix::ffi::OsStrExt;
+    std::ffi::CString::new(path.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::other(format!("ruta con NUL: {}", path.display())))
+}
+
+/// Corre en el hijo, entre `fork` y `exec`, todavía como root: sólo syscalls,
+/// nada de memoria nueva (el padre tiene muchos hilos).
+///
+/// 1. `unshare(CLONE_NEWNS)`: montajes propios del proceso y sus hijos.
+/// 2. `/` recursivo privado: lo que se monte aquí no se propaga a la caja.
+/// 3. `mount --bind` de cada par (su tmp sobre `/tmp` y `/var/tmp`, su shm
+///    sobre `/dev/shm`).
+/// 4. `setgroups([])`, `setgid`, `setuid` (en ese orden: sin root ya no se
+///    podría cambiar el gid) y `umask 077`.
+#[cfg(target_os = "linux")]
+fn enter_private_namespace(
+    binds: &[(std::ffi::CString, std::ffi::CString)],
+    uid: u32,
+    gid: u32,
+) -> std::io::Result<()> {
+    fn check(result: libc::c_int) -> std::io::Result<()> {
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+    // SAFETY: syscalls async-signal-safe sobre punteros a CStrings vivas.
+    unsafe {
+        check(libc::unshare(libc::CLONE_NEWNS))?;
+        check(libc::mount(
+            std::ptr::null(),
+            c"/".as_ptr(),
+            std::ptr::null(),
+            libc::MS_REC | libc::MS_PRIVATE,
+            std::ptr::null(),
+        ))?;
+        for (source, target) in binds {
+            check(libc::mount(
+                source.as_ptr(),
+                target.as_ptr(),
+                std::ptr::null(),
+                libc::MS_BIND,
+                std::ptr::null(),
+            ))?;
+        }
+        check(libc::setgroups(0, std::ptr::null()))?;
+        check(libc::setgid(gid))?;
+        check(libc::setuid(uid))?;
+        libc::umask(0o077);
+    }
+    Ok(())
 }
 
 /// Qué variables del proceso root hereda un proceso de una conversación
@@ -700,6 +860,68 @@ mod tests {
         remove_session_sandbox(id);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn private_tmp_comes_from_tmpdir_inside_the_write_roots() {
+        use crate::session::session_env::{remove_session_env, set_session_env};
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let data = std::fs::canonicalize(temp.path()).unwrap();
+        let home = data.join("work/s/20001");
+        let tmp = data.join("tmp/20001");
+        std::fs::create_dir_all(&home).unwrap();
+        let sandbox = SessionSandbox {
+            uid: 20001,
+            gid: 20001,
+            home: home.clone(),
+            cwd: home.clone(),
+            read: vec![],
+            write: vec![home.clone(), tmp.clone()],
+        };
+        let session_id = "session-sandbox-private-tmp";
+        let tmpdir = |value: &Path| {
+            set_session_env(
+                session_id,
+                HashMap::from([("TMPDIR".to_string(), value.display().to_string())]),
+            )
+        };
+
+        tmpdir(&tmp);
+        assert_eq!(sandbox.private_tmp_dir(Some(session_id)), tmp);
+        let binds = sandbox.private_mounts(Some(session_id)).unwrap();
+        assert!(tmp.is_dir());
+        assert_eq!(
+            std::fs::metadata(&tmp).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        let (source, target) = &binds[0];
+        assert_eq!(source.to_str().unwrap(), tmp.to_str().unwrap());
+        assert_eq!(target.to_str().unwrap(), "/tmp");
+        if Path::new("/var/tmp").is_dir() {
+            assert!(binds
+                .iter()
+                .any(|(_, target)| target.to_str() == Ok("/var/tmp")));
+        }
+
+        // Un TMPDIR fuera de sus raíces (o ninguno) no se monta: va el de su home.
+        let fallback = home.join(".ghosty/tmp");
+        tmpdir(&data.join("tmp/20002"));
+        assert_eq!(sandbox.private_tmp_dir(Some(session_id)), fallback);
+        remove_session_env(session_id);
+        assert_eq!(sandbox.private_tmp_dir(Some(session_id)), fallback);
+        assert_eq!(sandbox.private_tmp_dir(None), fallback);
+        sandbox.private_mounts(None).unwrap();
+        for dir in [home.join(".ghosty"), fallback] {
+            assert_eq!(
+                std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+                0o700,
+                "{}",
+                dir.display()
+            );
+        }
+    }
+
     #[test]
     fn inheritable_env_is_an_allowlist_without_secrets() {
         for name in [
@@ -742,7 +964,7 @@ mod tests {
         let Fixture { sandbox, .. } = fixture();
         let mut command = tokio::process::Command::new("true");
         command.env("ANTHROPIC_API_KEY", "secreto");
-        sandbox.apply_identity(&mut command);
+        sandbox.apply_identity(&mut command, None);
         let envs: Vec<_> = command.as_std().get_envs().collect();
         assert!(envs.iter().all(|(key, _)| *key != "ANTHROPIC_API_KEY"));
         let home = command
