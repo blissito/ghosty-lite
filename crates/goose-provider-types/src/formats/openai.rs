@@ -22,7 +22,7 @@ use rmcp::model::{object, CallToolRequestParams, ContentBlock, ErrorCode, ErrorD
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 type ToolCallData = HashMap<
@@ -512,13 +512,21 @@ pub fn format_messages_with_options(
         }
 
         if has_message_payload {
-            output.insert(0, converted);
+            if message.role == Role::User && !output.is_empty() {
+                // Un mensaje user con respuestas de herramienta y además texto: las
+                // respuestas `tool` tienen que ir pegadas al assistant que las pidió,
+                // así que el texto va detrás de ellas.
+                output.push(converted);
+            } else {
+                output.insert(0, converted);
+            }
         }
 
         messages_spec.extend(output);
     }
 
     merge_split_tool_call_messages(&mut messages_spec);
+    ensure_tool_call_responses(&mut messages_spec);
 
     if let Some(format) = options.thinking_preservation_format {
         inline_reasoning_content(&mut messages_spec, format);
@@ -647,6 +655,105 @@ fn merge_split_tool_call_messages(messages: &mut Vec<Value>) {
 
         i = insert_at + num_collected;
     }
+}
+
+/// Texto del `role:"tool"` sintético para un `tool_call` que se quedó sin respuesta.
+const MISSING_TOOL_RESULT_TEXT: &str = "(la herramienta no devolvió resultado: turno interrumpido)";
+
+/// Garantiza el contrato de OpenAI: cada `tool_calls` de un mensaje assistant va
+/// seguido, sin nada en medio, de un `role:"tool"` por cada `tool_call_id`.
+///
+/// DeepSeek (y otros estrictos) contestan 400 «insufficient tool messages following
+/// tool_calls message» si no, y como el historial persistido no cambia, TODOS los
+/// turnos siguientes de la sesión mueren con el mismo 400. Casos que lo rompían:
+/// - resultados con imagen: el mensaje `user` con la imagen se emitía pegado a su
+///   `tool`, y al reunir un assistant partido (`merge_split_tool_call_messages`) o
+///   con varias respuestas en un mensaje quedaba `tool1, user(img), tool2`;
+/// - un `tool_call` sin respuesta (turno cortado) o una respuesta duplicada.
+///
+/// Arreglarlo aquí, al armar el request, hace que una sesión ya «muerta» se cure
+/// en el siguiente turno sin tocar lo guardado.
+fn ensure_tool_call_responses(messages: &mut Vec<Value>) {
+    let mut result: Vec<Value> = Vec::with_capacity(messages.len());
+    let mut i = 0;
+    while i < messages.len() {
+        let msg = &messages[i];
+        let call_ids: Vec<String> = if msg.get("role") == Some(&json!("assistant")) {
+            msg.get("tool_calls")
+                .and_then(|tc| tc.as_array())
+                .map(|calls| {
+                    calls
+                        .iter()
+                        .filter_map(|c| c.get("id").and_then(|id| id.as_str()))
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        if call_ids.is_empty() {
+            result.push(msg.clone());
+            i += 1;
+            continue;
+        }
+
+        result.push(msg.clone());
+
+        // El bloque que sigue: respuestas `tool` y las imágenes sintéticas que
+        // `format_messages` pone tras un resultado con imagen, en cualquier orden.
+        let mut tool_messages: Vec<Value> = Vec::new();
+        let mut image_parts: Vec<Value> = Vec::new();
+        let mut answered: HashSet<String> = HashSet::new();
+        let mut j = i + 1;
+        while j < messages.len() {
+            let next = &messages[j];
+            if next.get("role") == Some(&json!("tool")) {
+                let id = next
+                    .get("tool_call_id")
+                    .and_then(|id| id.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                if call_ids.contains(&id) && answered.insert(id.clone()) {
+                    tool_messages.push(next.clone());
+                } else {
+                    tracing::warn!(
+                        tool_call_id = %id,
+                        "dropping tool message that does not answer the preceding tool_calls"
+                    );
+                }
+            } else if is_image_only_user_message(next) {
+                if let Some(parts) = next.get("content").and_then(|c| c.as_array()) {
+                    image_parts.extend(parts.iter().cloned());
+                }
+            } else {
+                break;
+            }
+            j += 1;
+        }
+
+        // Un bloque al final del historial es la llamada en vuelo: no se toca.
+        let followed_by_more = j < messages.len();
+        for id in &call_ids {
+            if followed_by_more && !answered.contains(id) {
+                tracing::warn!(tool_call_id = %id, "inserting synthetic tool result");
+                tool_messages.push(json!({
+                    "role": "tool",
+                    "content": MISSING_TOOL_RESULT_TEXT,
+                    "tool_call_id": id,
+                }));
+            }
+        }
+
+        result.extend(tool_messages);
+        // Las imágenes van DESPUÉS de todas las respuestas, en un solo mensaje.
+        if !image_parts.is_empty() {
+            result.push(json!({"role": "user", "content": image_parts}));
+        }
+        i = j;
+    }
+    *messages = result;
 }
 
 /// True if `msg` is a synthetic image-only user message (content is exclusively image_url items).
@@ -1770,7 +1877,11 @@ pub fn create_request_for_model_with_options(
     // DeepSeek V4: thinking is on by default at `high`; `Off` has to be said explicitly.
     if supports_deepseek_effort {
         if let Some(effort) = model_config.thinking_effort() {
-            let kind = if effort == ThinkingEffort::Off { "disabled" } else { "enabled" };
+            let kind = if effort == ThinkingEffort::Off {
+                "disabled"
+            } else {
+                "enabled"
+            };
             payload["thinking"] = json!({ "type": kind });
         }
     }
@@ -4784,6 +4895,180 @@ data: [DONE]"#;
         assert_eq!(messages[2]["role"], "user");
         assert_eq!(messages[3]["role"], "tool");
         assert_eq!(messages[3]["tool_call_id"], "tc2");
+    }
+
+    /// Reproduce la condición exacta del 400 de DeepSeek: un assistant con N
+    /// `tool_calls` debe ir seguido de N mensajes `tool` consecutivos con esos ids.
+    fn assert_tool_calls_answered(spec: &[Value]) {
+        for (i, msg) in spec.iter().enumerate() {
+            let Some(calls) = msg.get("tool_calls").and_then(|tc| tc.as_array()) else {
+                continue;
+            };
+            let expected: HashSet<&str> = calls.iter().filter_map(|c| c["id"].as_str()).collect();
+            let answered: HashSet<&str> = spec[i + 1..]
+                .iter()
+                .take_while(|m| m["role"] == "tool")
+                .filter_map(|m| m["tool_call_id"].as_str())
+                .collect();
+            assert_eq!(
+                expected, answered,
+                "insufficient tool messages following tool_calls message at {i}: {spec:#?}"
+            );
+        }
+        for (i, msg) in spec.iter().enumerate() {
+            if msg["role"] == "tool" {
+                let prev = &spec[..i];
+                let owner = prev
+                    .iter()
+                    .rev()
+                    .find(|m| m["role"] != "tool")
+                    .expect("tool message without preceding assistant");
+                assert!(
+                    owner.get("tool_calls").is_some(),
+                    "orphan tool message at {i}"
+                );
+            }
+        }
+    }
+
+    fn image_tool_result(id: &str) -> Message {
+        Message::user().with_tool_response(
+            id,
+            Ok(rmcp::model::CallToolResult::success(vec![
+                rmcp::model::ContentBlock::text("ok"),
+                rmcp::model::ContentBlock::image("aW1hZ2VkYXRh", "image/png"),
+            ])),
+        )
+    }
+
+    #[test]
+    fn test_split_tool_calls_with_images_keep_tool_messages_contiguous() {
+        // El caso real (2026-09-23): DeepSeek con thinking + visión, el agente
+        // revisa dos imágenes en paralelo. agent.rs parte la respuesta en pares
+        // asst(TC)/tool con el mismo reasoning; al reunirlos quedaba
+        // tool1, user(img), tool2 → 400 y la sesión muerta para siempre.
+        let thinking = || MessageContentBlock::thinking("reasoning", "");
+        let messages = vec![
+            Message::user().with_text("revisa las fotos"),
+            Message::assistant()
+                .with_content(thinking())
+                .with_tool_request(
+                    "tc1",
+                    Ok(CallToolRequestParams::new("view").with_arguments(object!({}))),
+                ),
+            image_tool_result("tc1"),
+            Message::assistant()
+                .with_content(thinking())
+                .with_tool_request(
+                    "tc2",
+                    Ok(CallToolRequestParams::new("view").with_arguments(object!({}))),
+                ),
+            image_tool_result("tc2"),
+            Message::assistant().with_text("listo"),
+            Message::user().with_text("gracias"),
+        ];
+        let spec = format_messages_with_options(
+            &messages,
+            &ImageFormat::OpenAi,
+            OpenAiFormatOptions {
+                preserve_thinking_context: true,
+                supports_vision: true,
+                ..Default::default()
+            },
+        );
+
+        assert_tool_calls_answered(&spec);
+        assert_eq!(spec[1]["tool_calls"].as_array().unwrap().len(), 2);
+        assert_eq!(spec[2]["role"], "tool");
+        assert_eq!(spec[3]["role"], "tool");
+        // Las dos imágenes siguen viajando, en un mensaje después de las respuestas.
+        assert_eq!(spec[4]["role"], "user");
+        assert_eq!(spec[4]["content"].as_array().unwrap().len(), 2);
+        assert_eq!(spec[5]["role"], "assistant");
+    }
+
+    #[test]
+    fn test_multiple_image_tool_responses_in_one_message() {
+        let messages = vec![
+            Message::user().with_text("hola"),
+            Message::assistant()
+                .with_tool_request(
+                    "tc1",
+                    Ok(CallToolRequestParams::new("view").with_arguments(object!({}))),
+                )
+                .with_tool_request(
+                    "tc2",
+                    Ok(CallToolRequestParams::new("view").with_arguments(object!({}))),
+                ),
+            image_tool_result("tc1").with_tool_response(
+                "tc2",
+                Ok(rmcp::model::CallToolResult::success(vec![
+                    rmcp::model::ContentBlock::image("aW1hZ2VkYXRh", "image/png"),
+                ])),
+            ),
+        ];
+        let spec = format_messages_with_options(
+            &messages,
+            &ImageFormat::OpenAi,
+            OpenAiFormatOptions {
+                supports_vision: true,
+                ..Default::default()
+            },
+        );
+        assert_tool_calls_answered(&spec);
+        assert_eq!(spec.last().unwrap()["role"], "user");
+    }
+
+    #[test]
+    fn test_missing_tool_response_gets_synthetic_tool_message() {
+        // Turno cortado: quedó el tool_call sin su respuesta.
+        let messages = vec![
+            Message::user().with_text("hola"),
+            Message::assistant()
+                .with_tool_request(
+                    "tc1",
+                    Ok(CallToolRequestParams::new("a").with_arguments(object!({}))),
+                )
+                .with_tool_request(
+                    "tc2",
+                    Ok(CallToolRequestParams::new("b").with_arguments(object!({}))),
+                ),
+            Message::user().with_tool_response(
+                "tc1",
+                Ok(rmcp::model::CallToolResult::success(vec![
+                    rmcp::model::ContentBlock::text("r1"),
+                ])),
+            ),
+            Message::user().with_text("¿sigues?"),
+        ];
+        let spec = format_messages(&messages, &ImageFormat::OpenAi);
+        assert_tool_calls_answered(&spec);
+        assert_eq!(spec[3]["tool_call_id"], "tc2");
+        assert_eq!(spec[3]["content"], MISSING_TOOL_RESULT_TEXT);
+        assert_eq!(spec[4]["content"], "¿sigues?");
+    }
+
+    #[test]
+    fn test_user_text_with_tool_response_goes_after_tool_message() {
+        let messages = vec![
+            Message::user().with_text("hola"),
+            Message::assistant().with_tool_request(
+                "tc1",
+                Ok(CallToolRequestParams::new("a").with_arguments(object!({}))),
+            ),
+            Message::user()
+                .with_tool_response(
+                    "tc1",
+                    Ok(rmcp::model::CallToolResult::success(vec![
+                        rmcp::model::ContentBlock::text("r1"),
+                    ])),
+                )
+                .with_text("y otra cosa"),
+        ];
+        let spec = format_messages(&messages, &ImageFormat::OpenAi);
+        assert_tool_calls_answered(&spec);
+        assert_eq!(spec[2]["content"], "r1");
+        assert_eq!(spec[3]["content"], "y otra cosa");
     }
 
     #[test]
