@@ -1727,6 +1727,7 @@ pub fn create_request_for_model_with_options(
     let (model_name, legacy_reasoning_effort) = extract_reasoning_effort(capability_model_name);
     let is_reasoning_model = is_openai_responses_model(&model_name);
     let supports_xai_effort = supports_xai_reasoning_effort(&model_name);
+    let supports_deepseek_effort = supports_deepseek_reasoning_effort(&model_name);
     let reasoning_effort = if is_reasoning_model {
         model_config
             .thinking_effort()
@@ -1737,6 +1738,10 @@ pub fn create_request_for_model_with_options(
         model_config
             .thinking_effort()
             .and_then(|effort| xai_reasoning_effort_for_thinking(&model_name, effort))
+    } else if supports_deepseek_effort {
+        model_config
+            .thinking_effort()
+            .and_then(deepseek_reasoning_effort_for_thinking)
     } else {
         None
     };
@@ -1761,6 +1766,13 @@ pub fn create_request_for_model_with_options(
 
     if let Some(effort) = reasoning_effort {
         payload["reasoning_effort"] = json!(effort);
+    }
+    // DeepSeek V4: thinking is on by default at `high`; `Off` has to be said explicitly.
+    if supports_deepseek_effort {
+        if let Some(effort) = model_config.thinking_effort() {
+            let kind = if effort == ThinkingEffort::Off { "disabled" } else { "enabled" };
+            payload["thinking"] = json!({ "type": kind });
+        }
     }
 
     if !tools_spec.is_empty() {
@@ -1854,6 +1866,21 @@ pub fn is_openai_responses_model(model_name: &str) -> bool {
 }
 
 /// Returns whether an xAI Chat Completions model accepts `reasoning_effort`.
+/// DeepSeek V4 (flash / pro) takes `reasoning_effort` = low | high | max plus a
+/// `thinking` switch; without either it thinks at `high`.
+pub fn supports_deepseek_reasoning_effort(model_name: &str) -> bool {
+    model_name.to_ascii_lowercase().starts_with("deepseek-v4")
+}
+
+pub fn deepseek_reasoning_effort_for_thinking(effort: ThinkingEffort) -> Option<String> {
+    match effort {
+        ThinkingEffort::Off => None,
+        ThinkingEffort::Low => Some("low".to_string()),
+        ThinkingEffort::Medium | ThinkingEffort::High => Some("high".to_string()),
+        ThinkingEffort::Max => Some("max".to_string()),
+    }
+}
+
 pub fn supports_xai_reasoning_effort(model_name: &str) -> bool {
     let model_name = model_name.to_ascii_lowercase();
 
@@ -3148,6 +3175,32 @@ mod tests {
             !obj.contains_key("max_completion_tokens"),
             "max_completion_tokens should be omitted when model_config.max_tokens is None"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_deepseek_v4_thinking_effort() -> anyhow::Result<()> {
+        let req = |model: &str, effort: Option<ThinkingEffort>| {
+            let mut cfg = test_model_config(model);
+            if let Some(e) = effort {
+                cfg = cfg.with_thinking_effort(e);
+            }
+            create_request(&cfg, "system", &[], &[], &ImageFormat::OpenAi, true)
+        };
+        let max = req("deepseek-v4-flash-vision-exp", Some(ThinkingEffort::Max))?;
+        assert_eq!(max["reasoning_effort"], "max");
+        assert_eq!(max["thinking"]["type"], "enabled");
+        let medium = req("deepseek-v4-pro", Some(ThinkingEffort::Medium))?;
+        assert_eq!(medium["reasoning_effort"], "high");
+        let off = req("deepseek-v4-flash", Some(ThinkingEffort::Off))?;
+        assert!(off.get("reasoning_effort").is_none());
+        assert_eq!(off["thinking"]["type"], "disabled");
+        // Sin esfuerzo elegido no se manda nada: DeepSeek decide (high).
+        let none = req("deepseek-v4-flash", None)?;
+        assert!(none.get("reasoning_effort").is_none() && none.get("thinking").is_none());
+        // Otro modelo del mismo proveedor no cambia.
+        let old = req("deepseek-reasoner", Some(ThinkingEffort::Max))?;
+        assert!(old.get("reasoning_effort").is_none());
         Ok(())
     }
 
