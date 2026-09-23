@@ -2582,6 +2582,7 @@ impl GooseAcpAgent {
         let mut sessions = self.sessions.lock().await;
         sessions.remove(session_id);
         drop(sessions);
+        crate::session::session_env::remove_session_env(session_id);
 
         self.agent_manager
             .remove_session_if_loaded(session_id)

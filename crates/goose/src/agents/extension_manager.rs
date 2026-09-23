@@ -1701,6 +1701,7 @@ impl ExtensionManager {
                     .unwrap_or_else(|| effective_working_dir.clone());
 
                 if let Some(sid) = session_id {
+                    all_envs.extend(crate::session::session_env::session_env(sid));
                     all_envs.insert("AGENT_SESSION_ID".to_string(), sid.to_string());
                 }
 

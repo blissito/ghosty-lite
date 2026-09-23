@@ -750,6 +750,9 @@ fn build_shell_command(
 
 fn apply_session_environment(command: &mut tokio::process::Command, session_id: Option<&str>) {
     if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+        // Las variables propias de la sesión (`_meta["ghosty/env"]`) van antes
+        // para que `AGENT_SESSION_ID` no se pueda pisar.
+        command.envs(crate::session::session_env::session_env(session_id));
         command.env("AGENT_SESSION_ID", session_id);
     } else {
         command.env_remove("AGENT_SESSION_ID");
@@ -762,6 +765,9 @@ fn apply_flatpak_session_environment(
     session_id: Option<&str>,
 ) {
     if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+        for (key, value) in crate::session::session_env::session_env(session_id) {
+            command.arg(format!("--env={key}={value}"));
+        }
         command.arg(format!("--env=AGENT_SESSION_ID={session_id}"));
     } else {
         command.arg("--unset-env=AGENT_SESSION_ID");
@@ -1064,6 +1070,43 @@ mod tests {
                     .find_map(|(key, value)| (key == "AGENT_SESSION_ID").then_some(value)),
                 expected
             );
+        }
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn shell_sees_its_own_session_env() {
+        use crate::session::session_env::{remove_session_env, set_session_env};
+        use std::collections::HashMap;
+
+        let sessions = [
+            ("shell-env-session-a", "token-a"),
+            ("shell-env-session-b", "token-b"),
+        ];
+        for (session_id, token) in sessions {
+            set_session_env(
+                session_id,
+                HashMap::from([
+                    ("GS_TOOLS_TOKEN".to_string(), token.to_string()),
+                    ("AGENT_SESSION_ID".to_string(), "spoofed".to_string()),
+                ]),
+            );
+        }
+        for (session_id, token) in sessions {
+            let output = build_shell_command(
+                "printf '%s|%s' \"$GS_TOOLS_TOKEN\" \"$AGENT_SESSION_ID\"",
+                None,
+                None,
+                Some(session_id),
+            )
+            .output()
+            .await
+            .unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout),
+                format!("{token}|{session_id}")
+            );
+            remove_session_env(session_id);
         }
     }
 

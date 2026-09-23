@@ -3,9 +3,9 @@
 #[path = "acp_common_tests/mod.rs"]
 mod common_tests;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, ListSessionsRequest, ListSessionsResponse, NewSessionRequest, PromptRequest,
-    SessionConfigKind, SessionConfigOptionCategory, SessionConfigOptionValue, SessionInfo,
-    SetSessionConfigOptionRequest, StopReason, TextContent,
+    ContentBlock, ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, NewSessionRequest,
+    PromptRequest, SessionConfigKind, SessionConfigOptionCategory, SessionConfigOptionValue,
+    SessionInfo, SetSessionConfigOptionRequest, StopReason, TextContent,
 };
 use agent_client_protocol::ErrorCode;
 use common_tests::fixtures::server::{
@@ -1227,4 +1227,60 @@ fn test_shell_terminal_false() {
 #[test]
 fn test_shell_terminal_true() {
     run_test(async { run_shell_terminal_true::<AcpServerConnection>().await });
+}
+
+fn ghosty_env_meta(env: serde_json::Value) -> serde_json::Map<String, serde_json::Value> {
+    let mut meta = serde_json::Map::new();
+    meta.insert("ghosty/env".to_string(), env);
+    meta
+}
+
+#[test]
+fn test_ghosty_env_is_per_session_replaced_on_load_and_removed_on_close() {
+    use goose::session::session_env::session_env;
+
+    run_test(async {
+        let data_root = tempfile::tempdir().unwrap();
+        let conn = new_connection(data_root.path()).await;
+        let work_dir = tempfile::tempdir().unwrap();
+
+        let session_a = new_session_with_meta(
+            &conn,
+            work_dir.path(),
+            ghosty_env_meta(serde_json::json!({
+                "GS_TOOLS_TOKEN": "token-a",
+                "lower_case": "dropped",
+                "LD_PRELOAD": "dropped",
+            })),
+        )
+        .await
+        .unwrap();
+        let session_b = new_session_with_meta(
+            &conn,
+            work_dir.path(),
+            ghosty_env_meta(serde_json::json!({ "GS_TOOLS_TOKEN": "token-b" })),
+        )
+        .await
+        .unwrap();
+
+        let env_a = session_env(&session_a);
+        assert_eq!(env_a.len(), 1);
+        assert_eq!(env_a["GS_TOOLS_TOKEN"], "token-a");
+        assert_eq!(session_env(&session_b)["GS_TOOLS_TOKEN"], "token-b");
+
+        conn.cx()
+            .send_request(
+                LoadSessionRequest::new(session_a.clone(), work_dir.path()).meta(ghosty_env_meta(
+                    serde_json::json!({ "GS_TOOLS_TOKEN": "token-a2" }),
+                )),
+            )
+            .block_task()
+            .await
+            .unwrap();
+        assert_eq!(session_env(&session_a)["GS_TOOLS_TOKEN"], "token-a2");
+
+        conn.close_session(&session_a).await.unwrap();
+        assert!(session_env(&session_a).is_empty());
+        assert_eq!(session_env(&session_b)["GS_TOOLS_TOKEN"], "token-b");
+    });
 }

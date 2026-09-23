@@ -7,6 +7,7 @@ use super::tool_calls::conversion::{
 };
 use super::tool_calls::enrichment::tool_chain_summary;
 use super::*;
+use crate::session::session_env::{session_env_from_meta, set_session_env};
 use agent_client_protocol::schema::v1::ToolCall;
 
 fn replay_audience_annotations(audience: &[Role]) -> Annotations {
@@ -383,7 +384,8 @@ impl GooseAcpAgent {
         cx: &ConnectionTo<Client>,
         args: LoadSessionRequest,
     ) -> Result<LoadSessionResponse, agent_client_protocol::Error> {
-        debug!(?args, "load session request");
+        // Sin `?args`: el `_meta` puede traer secretos en `ghosty/env`.
+        debug!(session_id = %args.session_id.0, cwd = ?args.cwd, "load session request");
 
         let session_id_str = args.session_id.0.to_string();
 
@@ -395,6 +397,12 @@ impl GooseAcpAgent {
                 agent_client_protocol::Error::resource_not_found(Some(session_id_str.clone()))
                     .data(format!("Session not found: {}", session_id_str))
             })?;
+
+        // Un `ghosty/env` nuevo reemplaza al guardado; va antes de preparar el
+        // agente para que las extensiones stdio que nazcan aquí lo vean.
+        if let Some(env) = session_env_from_meta(args.meta.as_ref()) {
+            set_session_env(&session_id_str, env);
+        }
 
         let cwd = effective_session_cwd(self.session_cwd.as_deref(), &args.cwd);
         validate_absolute_cwd(&cwd)?;

@@ -3,6 +3,7 @@ use crate::acp::server::{meta_string, validate_absolute_cwd, ResultExt};
 use crate::agents::ExtensionLoadResult;
 use crate::config::{Config, GooseMode};
 use crate::recipe::{Recipe, Settings};
+use crate::session::session_env::{remove_session_env, session_env_from_meta, set_session_env};
 use crate::session::{ExtensionData, Session, SessionType};
 
 use super::GooseAcpAgent;
@@ -60,6 +61,10 @@ impl GooseAcpAgent {
             .create_session(args.cwd.clone(), session_name, session_type, current_mode)
             .await
             .internal_err_ctx("Failed to create session")?;
+        // Antes de activar la sesión: las extensiones stdio nacen con este env.
+        if let Some(env) = session_env_from_meta(args.meta.as_ref()) {
+            set_session_env(&session.id, env);
+        }
         match self
             .finish_new_session_setup(cx, config, &session, args, recipe, meta)
             .await
@@ -103,6 +108,7 @@ impl GooseAcpAgent {
     }
 
     async fn cleanup_failed_new_session(&self, session_id: &str) {
+        remove_session_env(session_id);
         if let Err(error) = self.session_manager.delete_session(session_id).await {
             warn!(
                 session_id,
