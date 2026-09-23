@@ -173,6 +173,19 @@ pub fn inherit_session_sandbox(parent_session_id: &str, child_session_id: &str) 
     }
 }
 
+/// Para los proveedores de CLI (claude-code, codex, gemini-cli, cursor-agent):
+/// su arnés ejecuta sus propias tools y hoy no hay cómo lanzarlo con la
+/// identidad de la sesión (lee archivos de estado de root). En una conversación
+/// aislada se niegan; el camino aislado es su variante ACP (`claude-acp`…).
+pub fn deny_cli_harness_if_sandboxed(provider_name: &str) -> Result<(), String> {
+    match crate::session_context::current_session_id().and_then(|id| session_sandbox(&id)) {
+        Some(_) => Err(format!(
+            "El proveedor {provider_name} no puede correr en una conversación aislada; usa su variante ACP."
+        )),
+        None => Ok(()),
+    }
+}
+
 fn denied(path: &Path, what: &str) -> String {
     format!(
         "Acceso denegado: {} está fuera de los directorios que esta conversación puede {what}.",
@@ -660,6 +673,31 @@ mod tests {
             assert!(sandbox.readable(&path).is_err(), "{}", path.display());
         }
         assert!(sandbox.writable(&home.join("dir-link/nuevo")).is_err());
+    }
+
+    #[tokio::test]
+    async fn cli_harness_is_denied_only_inside_a_sandboxed_session() {
+        let id = "session-sandbox-cli-harness";
+        set_session_sandbox(
+            id,
+            SessionSandbox {
+                uid: 20001,
+                gid: 20001,
+                home: "/h".into(),
+                cwd: "/h".into(),
+                read: vec![],
+                write: vec![],
+            },
+        );
+        let scoped = |session: Option<&str>| {
+            crate::session_context::with_session_id(session.map(str::to_string), async {
+                deny_cli_harness_if_sandboxed("claude-code")
+            })
+        };
+        assert!(scoped(Some(id)).await.is_err());
+        assert!(scoped(Some("otra-sesion")).await.is_ok());
+        assert!(scoped(None).await.is_ok());
+        remove_session_sandbox(id);
     }
 
     #[test]

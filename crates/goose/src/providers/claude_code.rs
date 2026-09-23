@@ -818,6 +818,8 @@ impl Provider for ClaudeCodeProvider {
         messages: &[Message],
         _tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        crate::session::session_sandbox::deny_cli_harness_if_sandboxed(self.get_name())
+            .map_err(ProviderError::RequestFailed)?;
         let session_id = crate::session_context::current_session_id().unwrap_or_default();
         let filtered_system = filter_extensions_from_system_prompt(system);
         let process_arc = Arc::clone(

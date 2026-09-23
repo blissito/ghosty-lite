@@ -39,6 +39,7 @@ use crate::conversation::message::{Message, MessageContent, TOOL_META_EXTERNAL_D
 use crate::permission::permission_confirmation::PrincipalType;
 use crate::permission::{Permission, PermissionConfirmation};
 use crate::providers::base::{MessageStream, PermissionRouting, Provider};
+use crate::session::session_sandbox::{session_sandbox, SessionSandbox};
 use crate::subprocess::configure_subprocess;
 use crate::token_counter::create_token_counter;
 use crate::utils::sanitize_unicode_tags;
@@ -431,6 +432,14 @@ impl AcpProvider {
         config: AcpProviderConfig,
         run: ClientLoopFn,
     ) -> Result<Self> {
+        let mut config = config;
+        // El proveedor nace dentro del alcance de su sesión (ver
+        // `Agent::recreate_provider_for_session`): si la conversación está
+        // aislada, el arnés corre con su identidad y en su cwd.
+        let harness_identity = HarnessIdentity::for_current_session(&name);
+        if let Some(identity) = &harness_identity {
+            config.work_dir = identity.sandbox.cwd.clone();
+        }
         let (tx, rx) = mpsc::channel(32);
         let (init_tx, init_rx) = oneshot::channel();
         let mode_mapping = config.mode_mapping.clone();
@@ -449,7 +458,7 @@ impl AcpProvider {
         let effort = AcpEffortState::new();
         let cancel_prompt = Arc::new(Notify::new());
         let steer_queue = Arc::new(SteerQueue::default());
-        let client_loop = AcpClientLoop::new(
+        let mut client_loop = AcpClientLoop::new(
             config,
             goose_mode_shared.clone(),
             pending_tool_updates.clone(),
@@ -458,6 +467,7 @@ impl AcpProvider {
             cancel_prompt.clone(),
             steer_queue.clone(),
         );
+        client_loop.harness_identity = harness_identity;
         let (cancel_tx, cancel_rx) = oneshot::channel();
         let loop_thread = spawn_client_loop(run(client_loop, rx, init_tx, cancel_rx));
         let mut client_loop_guard = ClientLoopGuard {
@@ -1241,6 +1251,7 @@ struct AcpClientLoop {
     effort: AcpEffortState,
     cancel_prompt: Arc<Notify>,
     steer_queue: Arc<SteerQueue>,
+    harness_identity: Option<HarnessIdentity>,
 }
 
 impl AcpClientLoop {
@@ -1262,6 +1273,7 @@ impl AcpClientLoop {
             effort,
             cancel_prompt,
             steer_queue,
+            harness_identity: None,
         }
     }
 
@@ -1270,7 +1282,7 @@ impl AcpClientLoop {
         mut rx: mpsc::Receiver<ClientRequest>,
         init_tx: oneshot::Sender<Result<InitializeResponse>>,
     ) {
-        let child = match spawn_acp_process(&self.config).await {
+        let child = match spawn_acp_process(&self.config, self.harness_identity.as_ref()).await {
             Ok(c) => c,
             Err(e) => {
                 let _ = init_tx.send(Err(anyhow::anyhow!("{e}")));
@@ -1319,6 +1331,7 @@ impl AcpClientLoop {
             effort,
             cancel_prompt,
             steer_queue,
+            harness_identity: _,
         } = self;
         let notification_callback = config.notification_callback.clone();
         let reverse_modes = reverse_mode_mapping(&config.mode_mapping);
@@ -1601,13 +1614,84 @@ fn emit_stderr_line(line: &mut Vec<u8>) {
     line.clear();
 }
 
-async fn spawn_acp_process(config: &AcpProviderConfig) -> Result<Child> {
+/// Credenciales que cada arnés ACP necesita del env de la caja cuando corre
+/// aislado (con `HarnessIdentity` el env se arma desde la lista blanca de
+/// `session_sandbox::is_inheritable_env`, que las deja fuera a propósito).
+/// Sólo se copian las que estén definidas en el proceso root:
+///
+/// - `claude-acp` (claude-agent-acp → Claude Code): `CLAUDE_CODE_OAUTH_TOKEN`,
+///   `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`.
+/// - `codex-acp`: `OPENAI_API_KEY`, `CODEX_API_KEY`, `OPENAI_BASE_URL`.
+/// - `copilot-acp`: `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`.
+/// - `amp-acp`: `AMP_API_KEY`.
+/// - `pi-acp` y cualquier otro: ninguna; si un arnés nuevo corre aislado y
+///   pide credencial, se agrega aquí.
+///
+/// Credenciales guardadas en ARCHIVO bajo la HOME de root (`claude login`,
+/// `~/.codex/auth.json`) no las ve: la HOME del arnés es la de la sesión.
+fn harness_credential_names(provider_name: &str) -> &'static [&'static str] {
+    match provider_name {
+        "claude-acp" => &[
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_BASE_URL",
+        ],
+        "codex-acp" => &["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL"],
+        "copilot-acp" => &["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"],
+        "amp-acp" => &["AMP_API_KEY"],
+        _ => &[],
+    }
+}
+
+/// Identidad con la que corre el proceso del arnés de una conversación
+/// aislada: el arnés ejecuta SUS propias tools (Bash/Read/Write/Edit) dentro de
+/// su proceso, así que ahí no aplica nada del developer; lo único que lo
+/// contiene es su uid.
+struct HarnessIdentity {
+    session_id: String,
+    sandbox: Arc<SessionSandbox>,
+    credentials: Vec<(String, std::ffi::OsString)>,
+}
+
+impl HarnessIdentity {
+    fn for_current_session(provider_name: &str) -> Option<Self> {
+        let session_id = crate::session_context::current_session_id()?;
+        let sandbox = session_sandbox(&session_id)?;
+        let credentials = harness_credential_names(provider_name)
+            .iter()
+            .filter_map(|name| std::env::var_os(name).map(|value| (name.to_string(), value)))
+            .collect();
+        Some(Self {
+            session_id,
+            sandbox,
+            credentials,
+        })
+    }
+}
+
+fn build_acp_command(
+    config: &AcpProviderConfig,
+    identity: Option<&HarnessIdentity>,
+) -> Result<Command> {
     let mut cmd = Command::new(&config.command);
     cmd.args(&config.args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+
+    // Primero: limpia el env (lista blanca) y fija uid/gid/HOME/umask; lo
+    // demás se agrega encima.
+    #[cfg(unix)]
+    if let Some(identity) = identity {
+        identity.sandbox.apply_identity(&mut cmd);
+        cmd.current_dir(&identity.sandbox.cwd);
+    }
+    #[cfg(not(unix))]
+    if identity.is_some() {
+        anyhow::bail!("una conversación aislada no puede correr su arnés fuera de Unix");
+    }
 
     if let Some(command_dir) = config.command.parent() {
         // npm adapters commonly use `/usr/bin/env node`, while desktop PATH may omit their bin dir.
@@ -1631,8 +1715,27 @@ async fn spawn_acp_process(config: &AcpProviderConfig) -> Result<Child> {
         cmd.env(key, value);
     }
 
+    if let Some(identity) = identity {
+        cmd.envs(identity.credentials.iter().map(|(key, value)| (key, value)));
+        // Lo mismo que recibe el shell del developer: su `ghosty/env` (sub-token,
+        // TMPDIR…) y `AGENT_SESSION_ID`, que no se puede pisar.
+        cmd.envs(crate::session::session_env::session_env(
+            &identity.session_id,
+        ));
+        cmd.env("AGENT_SESSION_ID", &identity.session_id);
+    }
+
     configure_subprocess(&mut cmd);
-    cmd.spawn().context("failed to spawn ACP process")
+    Ok(cmd)
+}
+
+async fn spawn_acp_process(
+    config: &AcpProviderConfig,
+    identity: Option<&HarnessIdentity>,
+) -> Result<Child> {
+    build_acp_command(config, identity)?
+        .spawn()
+        .context("failed to spawn ACP process")
 }
 
 fn log_undelivered<E: std::fmt::Debug>(result: Result<(), E>, method: &str) {
@@ -4202,6 +4305,68 @@ mod tests {
             mode_mapping,
             notification_callback: None,
         }
+    }
+
+    #[test]
+    fn harness_credentials_are_per_provider() {
+        assert!(harness_credential_names("claude-acp").contains(&"CLAUDE_CODE_OAUTH_TOKEN"));
+        assert!(harness_credential_names("claude-acp").contains(&"ANTHROPIC_API_KEY"));
+        assert!(!harness_credential_names("claude-acp").contains(&"OPENAI_API_KEY"));
+        assert!(harness_credential_names("codex-acp").contains(&"OPENAI_API_KEY"));
+        assert!(harness_credential_names("pi-acp").is_empty());
+    }
+
+    /// El arnés de una conversación aislada nace con su identidad: env de la
+    /// caja filtrado + la credencial de su proveedor + el env de la sesión,
+    /// HOME y cwd propios y umask 077. Se usa el uid actual (cambiar a otro
+    /// exige root) para poder lanzarlo de verdad.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn sandboxed_harness_spawns_with_the_session_identity() {
+        use crate::session::session_env::{remove_session_env, set_session_env};
+
+        let temp = tempfile::tempdir().unwrap();
+        let home = std::fs::canonicalize(temp.path()).unwrap();
+        let cwd = home.join("work");
+        std::fs::create_dir_all(&cwd).unwrap();
+        let session_id = "acp-harness-identity-session";
+        set_session_env(
+            session_id,
+            HashMap::from([("GS_TOOLS_TOKEN".to_string(), "sub-token".to_string())]),
+        );
+        let identity = HarnessIdentity {
+            session_id: session_id.to_string(),
+            sandbox: Arc::new(SessionSandbox {
+                uid: unsafe { libc::getuid() },
+                gid: unsafe { libc::getgid() },
+                home: home.clone(),
+                cwd: cwd.clone(),
+                read: vec![],
+                write: vec![home.clone()],
+            }),
+            credentials: vec![("CLAUDE_CODE_OAUTH_TOKEN".into(), "oauth".into())],
+        };
+        let mut config = test_acp_config(HashMap::new(), None);
+        config.command = PathBuf::from("/bin/sh");
+        config.args = vec!["-c".into(), "env; echo \"PWD=$(pwd -P)\"; umask".into()];
+
+        let command = build_acp_command(&config, Some(&identity)).unwrap();
+        assert_eq!(command.as_std().get_current_dir(), Some(cwd.as_path()));
+        let mut command = command;
+        command.stdin(Stdio::null());
+        let output = command.output().await.unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let has = |line: &str| stdout.lines().any(|l| l == line);
+
+        assert!(has(&format!("HOME={}", home.display())), "{stdout}");
+        assert!(has(&format!("PWD={}", cwd.display())), "{stdout}");
+        assert!(has("CLAUDE_CODE_OAUTH_TOKEN=oauth"), "{stdout}");
+        assert!(has("GS_TOOLS_TOKEN=sub-token"), "{stdout}");
+        assert!(has(&format!("AGENT_SESSION_ID={session_id}")), "{stdout}");
+        assert!(has("0077"), "{stdout}");
+        // El env de cargo (lo que en la caja serían sus secretos) no pasa.
+        assert!(!stdout.contains("CARGO_MANIFEST_DIR="), "{stdout}");
+        remove_session_env(session_id);
     }
 
     #[tokio::test]

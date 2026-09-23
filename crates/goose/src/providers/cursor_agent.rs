@@ -540,6 +540,8 @@ impl Provider for CursorAgentProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        crate::session::session_sandbox::deny_cli_harness_if_sandboxed(self.get_name())
+            .map_err(ProviderError::RequestFailed)?;
         let lines = self
             .execute_command(model_config, system, messages, tools)
             .await?;

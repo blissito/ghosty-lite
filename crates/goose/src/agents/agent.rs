@@ -3689,10 +3689,15 @@ impl Agent {
             Config::global(),
         );
 
-        let provider = crate::providers::create_with_working_dir(
-            provider_name,
-            extensions,
-            session.working_dir.clone(),
+        // En el alcance de la sesión: un arnés ACP nace con su identidad
+        // (`ghosty/sandbox`) si la conversación está aislada.
+        let provider = crate::session_context::with_session_id(
+            Some(session_id.to_string()),
+            crate::providers::create_with_working_dir(
+                provider_name,
+                extensions,
+                session.working_dir.clone(),
+            ),
         )
         .await
         .map_err(|error| provider_creation_error(error, "Could not create provider"))?;
@@ -3798,10 +3803,13 @@ impl Agent {
                 .await
                 .is_ok()
             {
-                let p = crate::providers::create_with_working_dir(
-                    &provider_name,
-                    extensions,
-                    session.working_dir.clone(),
+                let p = crate::session_context::with_session_id(
+                    Some(session.id.clone()),
+                    crate::providers::create_with_working_dir(
+                        &provider_name,
+                        extensions,
+                        session.working_dir.clone(),
+                    ),
                 )
                 .await
                 .map_err(|error| provider_creation_error(error, "Could not create provider"))?;
@@ -3835,10 +3843,13 @@ impl Agent {
                     anyhow!("Could not configure fallback provider: invalid model {}", e)
                 })?;
 
-                let fallback_provider = crate::providers::create_with_working_dir(
-                    &fallback_provider_name,
-                    extensions,
-                    session.working_dir.clone(),
+                let fallback_provider = crate::session_context::with_session_id(
+                    Some(session.id.clone()),
+                    crate::providers::create_with_working_dir(
+                        &fallback_provider_name,
+                        extensions,
+                        session.working_dir.clone(),
+                    ),
                 )
                 .await
                 .map_err(|error| {

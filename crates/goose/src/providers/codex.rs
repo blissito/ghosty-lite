@@ -698,6 +698,8 @@ impl Provider for CodexProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        crate::session::session_sandbox::deny_cli_harness_if_sandboxed(self.get_name())
+            .map_err(ProviderError::RequestFailed)?;
         let session_id = crate::session_context::current_session_id().unwrap_or_default();
         let goose_mode = {
             let map = self.mode_by_session.read().await;

@@ -216,6 +216,8 @@ impl Provider for GeminiCliProvider {
         messages: &[Message],
         _tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
+        crate::session::session_sandbox::deny_cli_harness_if_sandboxed(self.get_name())
+            .map_err(ProviderError::RequestFailed)?;
         let GeminiCliProcess {
             mut child,
             mut reader,
