@@ -769,16 +769,17 @@ fn build_shell_command(
             if let Some(path) = working_dir {
                 command.current_dir(path);
             }
-            if let Some(path) = login_path {
-                command.env("PATH", path);
-            }
-            apply_session_environment(&mut command, session_id);
-            // Conversación aislada: su uid/gid, su HOME y siempre su cwd (el
-            // de la sesión puede ser un directorio compartido).
+            // Conversación aislada: su uid/gid, su HOME, el env de la caja
+            // filtrado (va primero: lo limpia) y siempre su cwd (el de la
+            // sesión puede ser un directorio compartido).
             if let Some(sandbox) = session_id.and_then(session_sandbox) {
                 sandbox.apply_identity(&mut command);
                 command.current_dir(&sandbox.cwd);
             }
+            if let Some(path) = login_path {
+                command.env("PATH", path);
+            }
+            apply_session_environment(&mut command, session_id);
             command
         }
     };
@@ -1185,6 +1186,13 @@ mod tests {
             .find(|(key, _)| *key == "HOME")
             .and_then(|(_, value)| value);
         assert_eq!(home, Some(sandbox.home.as_os_str()));
+        // Sin los secretos de la caja, pero con el env propio de la sesión.
+        assert!(std_command
+            .get_envs()
+            .all(|(key, _)| key != "ANTHROPIC_API_KEY" && key != "CLAUDE_CODE_OAUTH_TOKEN"));
+        assert!(std_command
+            .get_envs()
+            .any(|(key, value)| key == "AGENT_SESSION_ID" && value == Some(session_id.as_ref())));
 
         // Sin identidad todo sigue igual.
         let command = build_shell_command("true", Some(&shared), None, Some("no-sandbox"));

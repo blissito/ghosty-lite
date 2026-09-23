@@ -239,11 +239,42 @@ impl SessionSandbox {
         let requested = self.resolve(path);
         let real = canonicalize_lenient(&requested)?;
         let mut roots = roots;
-        if roots.any(|root| real.starts_with(canonical_root(root))) {
+        if roots.any(|root| real.starts_with(canonical_root(root))) && !self.in_sibling(&real) {
             Ok(real)
         } else {
             Err(denied(&requested, what))
         }
+    }
+
+    /// ¿Cae `real` en el directorio de OTRA conversación?
+    ///
+    /// Las raíces de escritura de cada sesión viven lado a lado
+    /// (`/data/work/s/<uid>`, `/data/tmp/<uid>`) y una raíz de lectura común
+    /// como `/data/work` contiene a todas. Regla: el padre de cada raíz de
+    /// escritura propia es un contenedor privado; dentro de él sólo vale lo que
+    /// cuelga de una raíz de escritura propia o de una raíz de lectura que viva
+    /// dentro del contenedor. (En la caja la E/S además corre
+    /// con el uid de la sesión y esos directorios son 0700; esto es la segunda
+    /// barrera, y la única fuera de Linux/root.)
+    fn in_sibling(&self, real: &Path) -> bool {
+        let own: Vec<PathBuf> = self.write.iter().map(|root| canonical_root(root)).collect();
+        if own.iter().any(|root| real.starts_with(root)) {
+            return false;
+        }
+        let read: Vec<PathBuf> = self.read.iter().map(|root| canonical_root(root)).collect();
+        own.iter()
+            .filter_map(|root| root.parent())
+            // Con una raíz colgada de `/` la regla lo negaría todo.
+            .filter(|container| container.parent().is_some())
+            .any(|container| {
+                real.starts_with(container)
+                    && real != container
+                    // Una raíz de lectura que vive DENTRO del contenedor (p. ej.
+                    // `<padre>/kb` junto a la home) se concedió a propósito.
+                    && !read.iter().any(|root| {
+                        root.starts_with(container) && root != container && real.starts_with(root)
+                    })
+            })
     }
 
     /// Ruta real (enlaces resueltos) si está bajo `read ∪ write`.
@@ -266,8 +297,10 @@ impl SessionSandbox {
         Ok(f())
     }
 
-    /// uid/gid, `HOME` y `umask 077` para un proceso que nace para la sesión.
-    /// El cwd lo pone quien llama.
+    /// uid/gid, `HOME`, `umask 077` y el env de la caja FILTRADO para un
+    /// proceso que nace para la sesión. Borra el env que ya tuviera el comando:
+    /// hay que llamarla ANTES de agregarle el de la sesión (`ghosty/env`,
+    /// `AGENT_SESSION_ID`) o el de la extensión. El cwd lo pone quien llama.
     ///
     /// Los grupos suplementarios los limpia la propia std: al cambiar de uid
     /// siendo root sin `groups` explícitos llama `setgroups(0, NULL)` antes del
@@ -276,6 +309,10 @@ impl SessionSandbox {
     pub fn apply_identity(&self, command: &mut tokio::process::Command) {
         command.uid(self.uid);
         command.gid(self.gid);
+        command.env_clear();
+        command.envs(
+            std::env::vars_os().filter(|(name, _)| name.to_str().is_some_and(is_inheritable_env)),
+        );
         command.env("HOME", &self.home);
         // SAFETY: `umask` es async-signal-safe y no toca memoria compartida.
         unsafe {
@@ -285,6 +322,35 @@ impl SessionSandbox {
             });
         }
     }
+}
+
+/// Qué variables del proceso root hereda un proceso de una conversación
+/// aislada. El resto NO pasa: ahí viven los secretos de la caja
+/// (`CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+/// `DEEPSEEK_API_KEY`, `GHOSTY_SERVER_TOKEN`, `REPORT_TOKEN`, `ACP_*`…).
+///
+/// Lista blanca:
+/// - `PATH`, `LANG`, `LC_*`, `TERM`, `TZ`, `NODE_PATH`;
+/// - config no secreta de la plataforma: `GS_*` (`GS_TOOLS_URL`,
+///   `GS_RENDER_URL`, `GS_TTS_URL`, `GS_STT_URL`, `GS_VIDEO_URL`,
+///   `GS_SVC_MESH`…) y `QUOTE_*`;
+/// - aun dentro de la lista, nada con cara de secreto (`TOKEN`, `SECRET`,
+///   `PASSWORD`, `API_KEY`, `*_KEY`): el `GS_TOOLS_TOKEN` de la caja no pasa;
+///   el sub-token propio llega por el `ghosty/env` de la sesión, igual que
+///   `GS_AGENT_GROUP_ID` y `TMPDIR`.
+pub fn is_inheritable_env(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    let allowed = matches!(
+        upper.as_str(),
+        "PATH" | "LANG" | "TERM" | "TZ" | "NODE_PATH"
+    ) || ["LC_", "GS_", "QUOTE_"]
+        .iter()
+        .any(|prefix| upper.starts_with(prefix));
+    let secret = ["TOKEN", "SECRET", "PASSWORD", "API_KEY"]
+        .iter()
+        .any(|word| upper.contains(word))
+        || upper.ends_with("_KEY");
+    allowed && !secret
 }
 
 /// Identidad de sistema de archivos por HILO (Linux).
@@ -554,12 +620,93 @@ mod tests {
         );
     }
 
+    /// El layout del relé: homes lado a lado en `/data/work/s/<uid>`, tmp en
+    /// `/data/tmp/<uid>` y `/data/work` entera como raíz de lectura.
+    #[cfg(unix)]
+    #[test]
+    fn other_sessions_homes_are_private_even_under_a_read_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let data = std::fs::canonicalize(temp.path()).unwrap();
+        for dir in ["work/s/20001", "work/s/20002", "tmp/20001", "tmp/20002"] {
+            std::fs::create_dir_all(data.join(dir)).unwrap();
+        }
+        std::fs::write(data.join("work/faq.md"), "faq").unwrap();
+        std::fs::write(data.join("work/s/20002/x"), "ajeno").unwrap();
+        std::fs::write(data.join("tmp/20002/y"), "ajeno").unwrap();
+        let home = data.join("work/s/20001");
+        std::os::unix::fs::symlink(data.join("work/s/20002/x"), home.join("link")).unwrap();
+        std::os::unix::fs::symlink(data.join("work/s/20002"), home.join("dir-link")).unwrap();
+        let sandbox = SessionSandbox {
+            uid: 20001,
+            gid: 20001,
+            home: home.clone(),
+            cwd: home.clone(),
+            read: vec![data.join("work")],
+            write: vec![home.clone(), data.join("tmp/20001")],
+        };
+
+        assert!(sandbox.readable(&data.join("work/faq.md")).is_ok());
+        assert!(sandbox.readable(&home.join("notas.txt")).is_ok());
+        assert!(sandbox.writable(&data.join("tmp/20001/z")).is_ok());
+        for path in [
+            data.join("work/s/20002/x"),
+            data.join("work/s/20002"),
+            data.join("work/s/20003/nuevo"),
+            data.join("tmp/20002/y"),
+            home.join("link"),
+            home.join("dir-link/x"),
+            home.join("../20002/x"),
+        ] {
+            assert!(sandbox.readable(&path).is_err(), "{}", path.display());
+        }
+        assert!(sandbox.writable(&home.join("dir-link/nuevo")).is_err());
+    }
+
+    #[test]
+    fn inheritable_env_is_an_allowlist_without_secrets() {
+        for name in [
+            "PATH",
+            "LANG",
+            "LC_ALL",
+            "TERM",
+            "TZ",
+            "NODE_PATH",
+            "GS_TOOLS_URL",
+            "GS_RENDER_URL",
+            "GS_SVC_MESH",
+            "QUOTE_CURRENCY",
+        ] {
+            assert!(is_inheritable_env(name), "{name}");
+        }
+        for name in [
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "GHOSTY_SERVER_TOKEN",
+            "REPORT_TOKEN",
+            "ACP_TENANT",
+            "GS_TOOLS_TOKEN",
+            "GS_SIGNING_SECRET",
+            "QUOTE_API_KEY",
+            "GS_PRIVATE_KEY",
+            "HOME",
+            "USER",
+            "AWS_SECRET_ACCESS_KEY",
+        ] {
+            assert!(!is_inheritable_env(name), "{name}");
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn apply_identity_sets_home_on_the_command() {
         let Fixture { sandbox, .. } = fixture();
         let mut command = tokio::process::Command::new("true");
+        command.env("ANTHROPIC_API_KEY", "secreto");
         sandbox.apply_identity(&mut command);
+        let envs: Vec<_> = command.as_std().get_envs().collect();
+        assert!(envs.iter().all(|(key, _)| *key != "ANTHROPIC_API_KEY"));
         let home = command
             .as_std()
             .get_envs()

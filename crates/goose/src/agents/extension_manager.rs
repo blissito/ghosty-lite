@@ -1785,11 +1785,13 @@ impl ExtensionManager {
                 } else {
                     let cmd = resolve_command(cmd);
                     Command::new(cmd).configure(|command| {
-                        command.args(args).envs(all_envs);
+                        // La identidad limpia el env: va antes que el de la
+                        // extensión y el de la sesión.
                         #[cfg(unix)]
                         if let Some(sandbox) = &sandbox {
                             sandbox.apply_identity(command);
                         }
+                        command.args(args).envs(all_envs);
                     })
                 };
 
