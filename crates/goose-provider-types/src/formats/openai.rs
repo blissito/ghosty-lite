@@ -1977,10 +1977,12 @@ pub fn is_openai_responses_model(model_name: &str) -> bool {
 }
 
 /// Returns whether an xAI Chat Completions model accepts `reasoning_effort`.
-/// DeepSeek V4 (flash / pro) takes `reasoning_effort` = low | high | max plus a
+/// DeepSeek V4 (flash / pro) and V4.1 Flash (`deepseek-flash`, the current id that
+/// replaced `deepseek-v4-flash`) take `reasoning_effort` = low | high | max plus a
 /// `thinking` switch; without either it thinks at `high`.
 pub fn supports_deepseek_reasoning_effort(model_name: &str) -> bool {
-    model_name.to_ascii_lowercase().starts_with("deepseek-v4")
+    let m = model_name.to_ascii_lowercase();
+    m.starts_with("deepseek-v4") || m.starts_with("deepseek-flash")
 }
 
 pub fn deepseek_reasoning_effort_for_thinking(effort: ThinkingEffort) -> Option<String> {
@@ -3301,6 +3303,9 @@ mod tests {
         let max = req("deepseek-v4-flash-vision-exp", Some(ThinkingEffort::Max))?;
         assert_eq!(max["reasoning_effort"], "max");
         assert_eq!(max["thinking"]["type"], "enabled");
+        // El id vigente de V4.1 Flash también recibe el esfuerzo.
+        let flash = req("deepseek-flash", Some(ThinkingEffort::Max))?;
+        assert_eq!(flash["reasoning_effort"], "max");
         let medium = req("deepseek-v4-pro", Some(ThinkingEffort::Medium))?;
         assert_eq!(medium["reasoning_effort"], "high");
         let off = req("deepseek-v4-flash", Some(ThinkingEffort::Off))?;
