@@ -68,6 +68,7 @@ use anyhow::Result;
 use fs_err as fs;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::{self, BoxStream, StreamExt};
+use goose_providers::conversation::token_usage::Usage as TokenUsage;
 use goose_providers::errors::ProviderError;
 use rmcp::model::{
     Annotations as RmcpAnnotations, ImageContent as RmcpImageContent, Role,
@@ -733,11 +734,43 @@ fn to_nonnegative_u64(value: Option<i32>) -> Option<u64> {
     value.and_then(|v| u64::try_from(v).ok())
 }
 
-fn build_prompt_usage(session: &Session) -> Option<Usage> {
-    let total = to_nonnegative_u64(session.usage.total_tokens)?;
-    let input = to_nonnegative_u64(session.usage.input_tokens).unwrap_or(0);
-    let output = to_nonnegative_u64(session.usage.output_tokens).unwrap_or(0);
-    Some(Usage::new(total, input, output))
+/// Usage of ONE prompt: what `accumulated_usage` grew while it ran. `session.usage` only
+/// holds the LAST provider call, so a turn with tool rounds (DeepSeek, OpenAI…) reported a
+/// fraction of its spend, and the cache never left the box. Falls back to the last call
+/// when nothing accumulated (sessions predating the ledger).
+fn build_prompt_usage(before: &TokenUsage, session: &Session) -> Option<Usage> {
+    let after = &session.accumulated_usage;
+    let delta = |a: Option<i32>, b: Option<i32>| -> Option<u64> {
+        let a = a.unwrap_or(0) as i64;
+        let b = b.unwrap_or(0) as i64;
+        u64::try_from(a - b).ok()
+    };
+    let total = delta(after.total_tokens, before.total_tokens).filter(|t| *t > 0);
+    let Some(total) = total else {
+        let total = to_nonnegative_u64(session.usage.total_tokens)?;
+        let input = to_nonnegative_u64(session.usage.input_tokens).unwrap_or(0);
+        let output = to_nonnegative_u64(session.usage.output_tokens).unwrap_or(0);
+        return Some(
+            Usage::new(total, input, output)
+                .cached_read_tokens(to_nonnegative_u64(session.usage.cache_read_input_tokens))
+                .cached_write_tokens(to_nonnegative_u64(session.usage.cache_write_input_tokens)),
+        );
+    };
+    Some(
+        Usage::new(
+            total,
+            delta(after.input_tokens, before.input_tokens).unwrap_or(0),
+            delta(after.output_tokens, before.output_tokens).unwrap_or(0),
+        )
+        .cached_read_tokens(delta(
+            after.cache_read_input_tokens,
+            before.cache_read_input_tokens,
+        ))
+        .cached_write_tokens(delta(
+            after.cache_write_input_tokens,
+            before.cache_write_input_tokens,
+        )),
+    )
 }
 
 fn prompt_stop_reason(was_cancelled: bool, output_token_limit_reached: bool) -> StopReason {
@@ -2242,6 +2275,14 @@ impl GooseAcpAgent {
             return Err(error);
         }
 
+        // Snapshot BEFORE the reply: the prompt's usage is what accumulated past this point.
+        let usage_before = self
+            .session_manager
+            .get_session(&session_id, false)
+            .await
+            .map(|s| s.accumulated_usage)
+            .unwrap_or_default();
+
         let user_message = Self::convert_acp_prompt_to_message(&args.prompt);
         let use_state_machine = args
             .meta
@@ -2296,7 +2337,7 @@ impl GooseAcpAgent {
             prompt_stop_reason(outcome.was_cancelled, outcome.output_token_limit_reached);
 
         let mut response = PromptResponse::new(stop_reason);
-        if let Some(usage) = build_prompt_usage(&session) {
+        if let Some(usage) = build_prompt_usage(&usage_before, &session) {
             response = response.usage(usage);
         }
         Ok(response)
@@ -3357,15 +3398,21 @@ print(\"hello, world\")
     }
 
     #[test]
-    fn test_build_prompt_usage_uses_current_turn_tokens() {
+    fn test_build_prompt_usage_reports_the_prompt_delta_with_cache() {
+        // Two provider calls in the turn: `usage` only holds the last one; the delta has both.
+        let before = TokenUsage::new(Some(1_000), Some(100), Some(1_100))
+            .with_cache_tokens(Some(900), Some(50));
         let session = make_session_with_usage(
             TokenUsage::new(Some(80), Some(40), Some(120)),
-            TokenUsage::new(Some(210), Some(150), Some(360)),
+            TokenUsage::new(Some(31_000), Some(1_300), Some(32_300))
+                .with_cache_tokens(Some(28_900), Some(1_050)),
         );
-        let usage = build_prompt_usage(&session).expect("usage should be present");
-        assert_eq!(usage.total_tokens, 120);
-        assert_eq!(usage.input_tokens, 80);
-        assert_eq!(usage.output_tokens, 40);
+        let usage = build_prompt_usage(&before, &session).expect("usage should be present");
+        assert_eq!(usage.total_tokens, 31_200);
+        assert_eq!(usage.input_tokens, 30_000);
+        assert_eq!(usage.output_tokens, 1_200);
+        assert_eq!(usage.cached_read_tokens, Some(28_000));
+        assert_eq!(usage.cached_write_tokens, Some(1_000));
     }
 
     #[test]
@@ -3374,7 +3421,8 @@ print(\"hello, world\")
             TokenUsage::new(Some(80), Some(40), Some(120)),
             TokenUsage::default(),
         );
-        let usage = build_prompt_usage(&session).expect("usage should be present");
+        let usage =
+            build_prompt_usage(&TokenUsage::default(), &session).expect("usage should be present");
         assert_eq!(usage.total_tokens, 120);
         assert_eq!(usage.input_tokens, 80);
         assert_eq!(usage.output_tokens, 40);
@@ -3391,7 +3439,7 @@ print(\"hello, world\")
             },
             TokenUsage::default(),
         );
-        assert!(build_prompt_usage(&session).is_none());
+        assert!(build_prompt_usage(&TokenUsage::default(), &session).is_none());
     }
 
     #[test_case(false, false, StopReason::EndTurn; "normal completion")]

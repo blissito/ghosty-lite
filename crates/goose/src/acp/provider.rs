@@ -1168,11 +1168,7 @@ impl Provider for AcpProvider {
                         if let Some(usage) = usage {
                             let provider_usage = ProviderUsage::new(
                                 model_name.clone(),
-                                Usage::new(
-                                    Some(usage.input_tokens as i32),
-                                    Some(usage.output_tokens as i32),
-                                    Some(usage.total_tokens as i32),
-                                ),
+                                acp_usage_to_usage(&usage),
                             );
                             yield (None, Some(provider_usage));
                         }
@@ -2478,6 +2474,30 @@ fn extract_effort_capability(
 /// Config-options payloads carry the agent's full set, so a payload without an
 /// effort selector means the current model has none and the mirrored capability
 /// must be dropped.
+/// The harness (claude-agent-acp) reports cache-EXCLUSIVE input plus cached read/write
+/// apart, while its `totalTokens` already counts the cache. Dropping the cache made a
+/// Sonnet turn look like ~2 input tokens; fold it into input like every native provider
+/// (`Usage::from_cache_exclusive_input`), but keep the harness total as is.
+fn acp_usage_to_usage(usage: &AcpUsage) -> Usage {
+    let read = usage.cached_read_tokens.unwrap_or(0);
+    let write = usage.cached_write_tokens.unwrap_or(0);
+    let to_i32 = |v: u64| i32::try_from(v).unwrap_or(i32::MAX);
+    Usage::new(
+        Some(to_i32(
+            usage
+                .input_tokens
+                .saturating_add(read)
+                .saturating_add(write),
+        )),
+        Some(to_i32(usage.output_tokens)),
+        Some(to_i32(usage.total_tokens)),
+    )
+    .with_cache_tokens(
+        usage.cached_read_tokens.map(to_i32),
+        usage.cached_write_tokens.map(to_i32),
+    )
+}
+
 #[cfg(test)]
 fn refresh_effort_state(
     effort_state: &Arc<Mutex<Option<ThinkingEffortCapability>>>,
@@ -2644,6 +2664,19 @@ mod tests {
         ConfigOptionUpdate, ErrorCode, SessionConfigSelectGroup, SessionConfigSelectOption,
         SessionMode, SessionModeId,
     };
+
+    #[test]
+    fn acp_usage_folds_cache_into_input_without_double_counting_total() {
+        let acp = AcpUsage::new(30_302, 2, 300)
+            .cached_read_tokens(28_000u64)
+            .cached_write_tokens(2_000u64);
+        let u = acp_usage_to_usage(&acp);
+        assert_eq!(u.input_tokens, Some(30_002));
+        assert_eq!(u.output_tokens, Some(300));
+        assert_eq!(u.total_tokens, Some(30_302));
+        assert_eq!(u.cache_read_input_tokens, Some(28_000));
+        assert_eq!(u.cache_write_input_tokens, Some(2_000));
+    }
 
     use test_case::test_case;
 
