@@ -5,6 +5,13 @@ ghosty-lite parte de [goose](https://github.com/block/goose) **v1.51.0** (tag
 licencia Apache 2.0: deja constancia de que los archivos fueron modificados. El detalle
 línea a línea está en `git log fork-point-v1.51.0..HEAD` (y `fork-point-v1.48.0..` para la historia completa).
 
+**Parches posteriores traídos por cherry-pick (2026-10-03, de v1.52/v1.53):** #12272 (`strict:false` en
+tools de chat-completions) y #12444 (autocompact en fronteras de tools). Descartados a propósito:
+#12233 (ya resuelto aquí en `31e2a075b`, con otro orden de mensajes), #12516 (agranda el future de la
+respuesta y revienta el stack de 2 MB en `bang_shell_visibility_…`), #11501 (apaga TODAS las
+redirecciones del cliente MCP HTTP: rompería MCPs que redirigen legítimamente) y #12006
+(`usage_update` por llamada: el front no lo lee).
+
 ## Qué se quitó
 
 | Componente | Por qué |
