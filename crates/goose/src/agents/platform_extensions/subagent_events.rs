@@ -107,14 +107,31 @@ impl TaskReport {
                         .as_ref()
                         .map(|c| c.name.to_string())
                         .unwrap_or_else(|_| "herramienta".to_string());
-                    self.push_step("tool", &name);
+                    self.push_step("tool", &tool_label(&name));
                 }
-                MessageContent::Text(t) if !t.text.trim().is_empty() => {
-                    let line = t.text.trim().lines().next().unwrap_or("").to_string();
-                    self.push_step("text", &line);
-                }
+                // El hijo transmite su texto en pedazos («En», «contr», «é»…): se pegan al paso
+                // de texto anterior hasta que entre una herramienta. Antes cada pedazo era un
+                // renglón y la hoja de la app salía una palabra cortada por línea.
+                MessageContent::Text(t) if !t.text.is_empty() => self.append_text(&t.text),
                 _ => {}
             }
+        }
+    }
+
+    fn append_text(&mut self, chunk: &str) {
+        if let Some(last) = self.steps.last_mut() {
+            if last["kind"] == "text" {
+                let prev = last["text"].as_str().unwrap_or("").to_string();
+                if prev.chars().count() < 200 {
+                    let joined: String = (prev + chunk).chars().take(200).collect();
+                    last["text"] = json!(joined);
+                }
+                return;
+            }
+        }
+        let start = chunk.trim_start();
+        if !start.is_empty() {
+            self.push_step("text", start);
         }
     }
 
@@ -171,6 +188,33 @@ impl TaskReport {
     }
 }
 
+/// Nombre de herramienta legible para la hoja de la app («ghosty__web_buscar» → «Buscando en
+/// la web»). Lo que no se conoce sale sin la extensión y sin guiones bajos.
+fn tool_label(name: &str) -> String {
+    let tool = name.split_once("__").map_or(name, |(_, t)| t);
+    let t = tool.to_lowercase();
+    let known = match t.as_str() {
+        "web_buscar" | "web_search" | "search" => Some("Buscando en la web"),
+        "web_leer" | "fetch" | "web_fetch" | "leer_pagina" => Some("Leyendo una página"),
+        "shell" => Some("Usando la terminal"),
+        "text_editor" | "edit" | "write" => Some("Editando un archivo"),
+        "read" | "read_file" | "tree" | "analyze" => Some("Leyendo archivos"),
+        "entregar_archivo" => Some("Preparando un archivo"),
+        "todo_write" | "todowrite" => Some("Organizando los pasos"),
+        "load" => Some("Revisando lo que llevo"),
+        _ => None,
+    };
+    if let Some(k) = known {
+        return k.to_string();
+    }
+    let human = tool.replace('_', " ");
+    let mut c = human.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => "Herramienta".to_string(),
+    }
+}
+
 /// Fuego y olvido: un aviso que no llega no puede frenar al agente.
 fn post(parent_session: &str, events: Value) {
     let (Ok(url), Ok(token)) = (
@@ -213,6 +257,18 @@ mod tests {
         assert!(token.is_cancelled());
         unregister("t1");
         assert!(!cancel("parent-a", "t1"));
+    }
+
+    #[test]
+    fn streamed_text_joins_into_one_step() {
+        let mut r = TaskReport::new("p", "t", "título", None);
+        for c in ["En", "contr", "é", " señales"] {
+            r.append_text(c);
+        }
+        assert_eq!(r.steps.len(), 1);
+        assert_eq!(r.steps[0]["text"], "Encontré señales");
+        assert_eq!(tool_label("ghosty__web_buscar"), "Buscando en la web");
+        assert_eq!(tool_label("ghosty__otra_cosa"), "Otra cosa");
     }
 
     #[test]
