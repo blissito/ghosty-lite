@@ -76,6 +76,7 @@ pub struct TaskReport {
     model: Option<String>,
     started_at: u64,
     tool_uses: u32,
+    tokens: u64,
     steps: Vec<Value>,
     last_sent: Option<Instant>,
 }
@@ -89,6 +90,7 @@ impl TaskReport {
             model,
             started_at: now_millis(),
             tool_uses: 0,
+            tokens: 0,
             steps: Vec::new(),
             last_sent: None,
         }
@@ -132,6 +134,11 @@ impl TaskReport {
         self.send("running", None);
     }
 
+    /// Los tokens del hijo (los de su sesión al terminar). Sin esto la hoja decía «0 tokens».
+    pub fn set_tokens(&mut self, tokens: u64) {
+        self.tokens = tokens;
+    }
+
     pub fn started(&mut self) {
         self.send("running", None);
     }
@@ -148,7 +155,7 @@ impl TaskReport {
             "title": self.title,
             "status": status,
             "startedAt": self.started_at,
-            "usage": { "toolUses": self.tool_uses },
+            "usage": { "toolUses": self.tool_uses, "tokens": self.tokens },
             "steps": self.steps,
         });
         if let Some(model) = &self.model {

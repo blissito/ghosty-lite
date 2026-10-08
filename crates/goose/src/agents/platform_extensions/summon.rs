@@ -1459,7 +1459,9 @@ impl SummonClient {
         .await;
 
         subagent_events::unregister(&subagent_session_id);
+        let tokens = Self::session_tokens(&self.context.session_manager, &subagent_session_id).await;
         if let Ok(mut r) = report.lock() {
+            r.set_tokens(tokens);
             match &result {
                 Ok(text) => r.finished("completed", Some(text.clone())),
                 Err(_) if child_token.is_cancelled() => r.finished("stopped", None),
@@ -2060,6 +2062,20 @@ impl SummonClient {
         completed.retain(|_id, task| task.completed_at.elapsed() <= ttl);
     }
 
+    /// Los tokens que gastó un hijo, sumados en su sesión.
+    async fn session_tokens(
+        sessions: &Arc<crate::session::SessionManager>,
+        session_id: &str,
+    ) -> u64 {
+        sessions
+            .get_session_usage_totals(session_id)
+            .await
+            .ok()
+            .and_then(|t| t.accumulated_usage.total_tokens)
+            .map(|n| n.max(0) as u64)
+            .unwrap_or(0)
+    }
+
     /// El modelo que se le dice a gs: el pedido en la llamada o el de los subagentes.
     fn reported_model(params: &DelegateParams) -> Option<String> {
         params
@@ -2168,6 +2184,7 @@ impl SummonClient {
         let finish_report = Arc::clone(&report);
         let finish_token = task_token.clone();
         let finish_id = task_id.clone();
+        let finish_sessions = self.context.session_manager.clone();
 
         let notification_sink = Self::notification_sink(None);
         let task_notification_sink = Arc::clone(&notification_sink);
@@ -2191,7 +2208,9 @@ impl SummonClient {
                 })
                 .await;
             subagent_events::unregister(&finish_id);
+            let tokens = Self::session_tokens(&finish_sessions, &finish_id).await;
             if let Ok(mut r) = finish_report.lock() {
+                r.set_tokens(tokens);
                 match &result {
                     Ok(text) => r.finished("completed", Some(text.clone())),
                     Err(_) if finish_token.is_cancelled() => r.finished("stopped", None),
