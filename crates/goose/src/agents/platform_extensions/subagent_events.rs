@@ -58,6 +58,11 @@ pub fn cancel(parent_session: &str, task_id: &str) -> bool {
     }
 }
 
+/// ¿Hay a quién avisar? (las variables las hornea gs en la caja).
+pub fn reports_enabled() -> bool {
+    std::env::var("GS_SUBAGENT_EVENTS_URL").is_ok() && std::env::var("FLEET_TOKEN").is_ok()
+}
+
 /// ¿Cuántos hijos siguen vivos? (para que el front no duerma la caja con hijos trabajando).
 pub fn running_count() -> usize {
     RUNNING.lock().map(|m| m.len()).unwrap_or(0)

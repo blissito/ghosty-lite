@@ -220,6 +220,14 @@ async fn health() -> &'static str {
     "ok"
 }
 
+/// Cuántos subagentes siguen vivos: el front lo suma a `/busy` para que la caja no se duerma
+/// con hijos trabajando aunque ya no haya turno.
+async fn subagents() -> axum::Json<serde_json::Value> {
+    axum::Json(serde_json::json!({
+        "running": crate::agents::platform_extensions::subagent_events::running_count()
+    }))
+}
+
 /// The full standalone ACP server router used by `ghosty serve`: ACP transport,
 /// optional token auth, health/status endpoints, and the MCP app proxy.
 pub fn create_router(
@@ -241,6 +249,7 @@ pub fn create_router(
     let aux_routes = Router::new()
         .route("/health", get(health))
         .route("/status", get(health))
+        .route("/subagents", get(subagents))
         .layer(aux_cors_layer());
 
     acp_routes.merge(aux_routes)

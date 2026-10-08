@@ -585,6 +585,13 @@ pub struct SummonClient {
 
 impl Drop for SummonClient {
     fn drop(&mut self) {
+        // ⚠️ Con gs escuchando (ghosty.studio) los hijos NO se cancelan al cerrarse la sesión:
+        // gs cierra la sesión ACP al final de cada turno y cada deploy corta el socket, y eso
+        // mataba a los hijos async a media tarea. Siguen corriendo en el proceso y su resultado
+        // le llega a gs por `subagent_events` (que despierta al hilo con el remate).
+        if subagent_events::reports_enabled() {
+            return;
+        }
         // Best-effort cancellation of running tasks on shutdown
         if let Ok(tasks) = self.background_tasks.try_lock() {
             for task in tasks.values() {
