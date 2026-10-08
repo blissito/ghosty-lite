@@ -167,7 +167,12 @@ impl TaskReport {
                         .as_ref()
                         .map(|c| c.name.to_string())
                         .unwrap_or_else(|_| "herramienta".to_string());
-                    self.push_step("tool", &tool_label(&name));
+                    let (label, class) = tool_label(&name);
+                    self.push_step("tool", &label);
+                    // La clase del paso (mismos `kind` que arma gs): la app elige el ícono con ella.
+                    if let Some(last) = self.steps.last_mut() {
+                        last["class"] = json!(class);
+                    }
                 }
                 // El hijo transmite su texto en pedazos («En», «contr», «é»…): se pegan al paso
                 // de texto anterior hasta que entre una herramienta. Antes cada pedazo era un
@@ -319,30 +324,32 @@ fn post_until_ok(parent_session: &str, events: Value) {
 }
 
 /// Nombre de herramienta legible para la hoja de la app («ghosty__web_buscar» → «Buscando en
-/// la web»). Lo que no se conoce sale sin la extensión y sin guiones bajos.
-fn tool_label(name: &str) -> String {
+/// la web») y su clase, con los mismos `kind` que arma gs (`web_search`, `read`…). Lo que no se
+/// conoce sale sin la extensión, sin guiones bajos y con clase `other`.
+fn tool_label(name: &str) -> (String, &'static str) {
     let tool = name.split_once("__").map_or(name, |(_, t)| t);
     let t = tool.to_lowercase();
     let known = match t.as_str() {
-        "web_buscar" | "web_search" | "search" => Some("Buscando en la web"),
-        "web_leer" | "fetch" | "web_fetch" | "leer_pagina" => Some("Leyendo una página"),
-        "shell" => Some("Usando la terminal"),
-        "text_editor" | "edit" | "write" => Some("Editando un archivo"),
-        "read" | "read_file" | "tree" | "analyze" => Some("Leyendo archivos"),
-        "entregar_archivo" => Some("Preparando un archivo"),
-        "todo_write" | "todowrite" => Some("Organizando los pasos"),
-        "load" => Some("Revisando lo que llevo"),
+        "web_buscar" | "web_search" | "search" => Some(("Buscando en la web", "web_search")),
+        "web_leer" | "fetch" | "web_fetch" | "leer_pagina" => Some(("Leyendo una página", "fetch")),
+        "shell" => Some(("Usando la terminal", "execute")),
+        "text_editor" | "edit" | "write" => Some(("Editando un archivo", "edit")),
+        "read" | "read_file" | "tree" | "analyze" => Some(("Leyendo archivos", "read")),
+        "entregar_archivo" => Some(("Preparando un archivo", "deliver")),
+        "todo_write" | "todowrite" => Some(("Organizando los pasos", "todo")),
+        "load" => Some(("Revisando lo que llevo", "collect")),
         _ => None,
     };
-    if let Some(k) = known {
-        return k.to_string();
+    if let Some((label, class)) = known {
+        return (label.to_string(), class);
     }
     let human = tool.replace('_', " ");
     let mut c = human.chars();
-    match c.next() {
+    let label = match c.next() {
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
         None => "Herramienta".to_string(),
-    }
+    };
+    (label, "other")
 }
 
 /// Fuego y olvido: un aviso que no llega no puede frenar al agente.
@@ -402,8 +409,8 @@ mod tests {
         }
         assert_eq!(r.steps.len(), 1);
         assert_eq!(r.steps[0]["text"], "Encontré señales");
-        assert_eq!(tool_label("ghosty__web_buscar"), "Buscando en la web");
-        assert_eq!(tool_label("ghosty__otra_cosa"), "Otra cosa");
+        assert_eq!(tool_label("ghosty__web_buscar"), ("Buscando en la web".to_string(), "web_search"));
+        assert_eq!(tool_label("ghosty__otra_cosa"), ("Otra cosa".to_string(), "other"));
     }
 
     #[test]
