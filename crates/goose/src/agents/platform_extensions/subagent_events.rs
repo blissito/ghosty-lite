@@ -188,6 +188,28 @@ impl TaskReport {
     }
 }
 
+/// El padre recogió a este hijo con `load`: su resultado ya está en la conversación y gs no
+/// debe despertar al padre para entregarlo de nuevo (entrega exactamente una vez). A diferencia
+/// del resto de los avisos, éste se espera (con tope): tiene que llegar antes de que cierre el
+/// turno del padre, que es cuando gs decide si despierta.
+pub async fn collected(parent_session: &str, task_id: &str) {
+    if !reports_enabled() {
+        return;
+    }
+    let events = json!([{ "type": "task", "task": { "id": task_id, "collected": true } }]);
+    let Some(req) = request(parent_session, events) else {
+        return;
+    };
+    match tokio::time::timeout(Duration::from_secs(3), req.send()).await {
+        Ok(Ok(r)) if !r.status().is_success() => {
+            warn!("subagent events: gs contestó {} a collected", r.status())
+        }
+        Ok(Err(e)) => warn!("subagent events: collected no llegó a gs: {e}"),
+        Err(_) => warn!("subagent events: collected tardó más de 3 s"),
+        _ => {}
+    }
+}
+
 /// Nombre de herramienta legible para la hoja de la app («ghosty__web_buscar» → «Buscando en
 /// la web»). Lo que no se conoce sale sin la extensión y sin guiones bajos.
 fn tool_label(name: &str) -> String {
@@ -216,24 +238,29 @@ fn tool_label(name: &str) -> String {
 }
 
 /// Fuego y olvido: un aviso que no llega no puede frenar al agente.
-fn post(parent_session: &str, events: Value) {
+fn request(parent_session: &str, events: Value) -> Option<reqwest::RequestBuilder> {
     let (Ok(url), Ok(token)) = (
         std::env::var("GS_SUBAGENT_EVENTS_URL"),
         std::env::var("FLEET_TOKEN"),
     ) else {
-        return;
+        return None;
     };
     let body = json!({ "sessionId": parent_session, "events": events });
-    tokio::spawn(async move {
-        let client = reqwest::Client::new();
-        let res = client
+    Some(
+        reqwest::Client::new()
             .post(&url)
             .bearer_auth(token)
             .timeout(Duration::from_secs(10))
-            .json(&body)
-            .send()
-            .await;
-        match res {
+            .json(&body),
+    )
+}
+
+fn post(parent_session: &str, events: Value) {
+    let Some(req) = request(parent_session, events) else {
+        return;
+    };
+    tokio::spawn(async move {
+        match req.send().await {
             Ok(r) if !r.status().is_success() => {
                 warn!("subagent events: gs contestó {}", r.status())
             }

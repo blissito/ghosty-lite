@@ -1029,6 +1029,12 @@ impl SummonClient {
             let task_result = self
                 .handle_load_task_result(name, cancel, peek, notification_emitter)
                 .await?;
+            // El padre ya tiene el resultado de este hijo: gs no debe despertarlo para
+            // entregárselo otra vez. Se espera a que gs lo apunte antes de devolver el resultado,
+            // así queda registrado antes de que el turno del padre pueda cerrar.
+            if !peek {
+                subagent_events::collected(session_id, name).await;
+            }
             let mut meta = MetaObject::new();
             meta.0.insert(
                 "subagent_session_id".to_string(),
