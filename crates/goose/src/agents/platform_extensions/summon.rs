@@ -1454,15 +1454,19 @@ impl SummonClient {
             on_message: Some(Self::reporting_callback(Arc::clone(&report), None)),
             notification_tx: None,
         };
-        let result = Self::run_subagent_with_notifications(
-            Self::notification_sink(notification_emitter),
-            move |notification_tx| {
-                let mut params = params;
-                params.notification_tx = Some(notification_tx);
-                run_subagent_task(params)
-            },
+        let beat = subagent_events::spawn_heartbeat(Arc::clone(&report));
+        let result = subagent_events::with_deadline(
+            Self::run_subagent_with_notifications(
+                Self::notification_sink(notification_emitter),
+                move |notification_tx| {
+                    let mut params = params;
+                    params.notification_tx = Some(notification_tx);
+                    run_subagent_task(params)
+                },
+            ),
         )
         .await;
+        beat.cancel();
 
         subagent_events::unregister(&subagent_session_id);
         let tokens = Self::session_tokens(&self.context.session_manager, &subagent_session_id).await;
@@ -2191,6 +2195,7 @@ impl SummonClient {
         let finish_token = task_token.clone();
         let finish_id = task_id.clone();
         let finish_sessions = self.context.session_manager.clone();
+        let beat = subagent_events::spawn_heartbeat(Arc::clone(&report));
 
         let notification_sink = Self::notification_sink(None);
         let task_notification_sink = Arc::clone(&notification_sink);
@@ -2206,13 +2211,15 @@ impl SummonClient {
                 on_message: Some(on_message),
                 notification_tx: None,
             };
-            let result =
+            let result = subagent_events::with_deadline(
                 Self::run_subagent_with_notifications(task_notification_sink, move |notification_tx| {
                     let mut params = params;
                     params.notification_tx = Some(notification_tx);
                     run_subagent_task(params)
-                })
-                .await;
+                }),
+            )
+            .await;
+            beat.cancel();
             subagent_events::unregister(&finish_id);
             let tokens = Self::session_tokens(&finish_sessions, &finish_id).await;
             if let Ok(mut r) = finish_report.lock() {
