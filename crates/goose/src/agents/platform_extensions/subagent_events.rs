@@ -1,0 +1,214 @@
+//! Avisos de subagentes hacia gs (ghosty.studio) y el registro para detenerlos.
+//!
+//! gs pinta la lista viva de subagentes en /c, iOS y Android con el mismo contrato que usa el
+//! claude-worker (`reporter.ts`): `POST $GS_SUBAGENT_EVENTS_URL` con
+//! `{sessionId, events: [{type: "task", task: {...}}]}` y `Authorization: Bearer $FLEET_TOKEN`.
+//! Sin esas variables (uso local de ghosty) todo esto es un no-op.
+//!
+//! Además lleva el registro global `task_id → CancellationToken` que usa el método ACP
+//! `_goose/unstable/subagent/cancel` para detener UN hijo desde la app.
+
+use once_cell::sync::Lazy;
+use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio_util::sync::CancellationToken;
+use tracing::warn;
+
+use crate::conversation::message::{Message, MessageContent};
+
+/// Cada cuánto se manda el avance de un hijo (pasos), como mucho.
+const PROGRESS_EVERY: Duration = Duration::from_secs(3);
+/// Pasos que se guardan por hijo (gs se queda con los últimos 50).
+const MAX_STEPS: usize = 50;
+
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Los hijos vivos, para poder detener uno por su id (`_goose/unstable/subagent/cancel`).
+static RUNNING: Lazy<Mutex<HashMap<String, (String, CancellationToken)>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+pub fn register(task_id: &str, parent_session: &str, token: CancellationToken) {
+    if let Ok(mut m) = RUNNING.lock() {
+        m.insert(task_id.to_string(), (parent_session.to_string(), token));
+    }
+}
+
+pub fn unregister(task_id: &str) {
+    if let Ok(mut m) = RUNNING.lock() {
+        m.remove(task_id);
+    }
+}
+
+/// Detiene un hijo. `false` si no existe o es de otra conversación.
+pub fn cancel(parent_session: &str, task_id: &str) -> bool {
+    let entry = RUNNING.lock().ok().and_then(|m| m.get(task_id).cloned());
+    match entry {
+        Some((parent, token)) if parent == parent_session => {
+            token.cancel();
+            true
+        }
+        _ => false,
+    }
+}
+
+/// ¿Cuántos hijos siguen vivos? (para que el front no duerma la caja con hijos trabajando).
+pub fn running_count() -> usize {
+    RUNNING.lock().map(|m| m.len()).unwrap_or(0)
+}
+
+/// El estado de UN hijo tal como lo espera gs.
+pub struct TaskReport {
+    parent_session: String,
+    id: String,
+    title: String,
+    model: Option<String>,
+    started_at: u64,
+    tool_uses: u32,
+    steps: Vec<Value>,
+    last_sent: Option<Instant>,
+}
+
+impl TaskReport {
+    pub fn new(parent_session: &str, id: &str, title: &str, model: Option<String>) -> Self {
+        Self {
+            parent_session: parent_session.to_string(),
+            id: id.to_string(),
+            title: title.to_string(),
+            model,
+            started_at: now_millis(),
+            tool_uses: 0,
+            steps: Vec::new(),
+            last_sent: None,
+        }
+    }
+
+    /// Lo que hizo el hijo en un mensaje: texto y herramientas, como pasos.
+    pub fn observe(&mut self, msg: &Message) {
+        for block in &msg.content {
+            match block {
+                MessageContent::ToolRequest(req) => {
+                    self.tool_uses += 1;
+                    let name = req
+                        .tool_call
+                        .as_ref()
+                        .map(|c| c.name.to_string())
+                        .unwrap_or_else(|_| "herramienta".to_string());
+                    self.push_step("tool", &name);
+                }
+                MessageContent::Text(t) if !t.text.trim().is_empty() => {
+                    let line = t.text.trim().lines().next().unwrap_or("").to_string();
+                    self.push_step("text", &line);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn push_step(&mut self, kind: &str, text: &str) {
+        let text: String = text.chars().take(200).collect();
+        self.steps.push(json!({ "at": now_millis(), "kind": kind, "text": text }));
+        if self.steps.len() > MAX_STEPS {
+            self.steps.remove(0);
+        }
+    }
+
+    /// Manda el avance si ya pasó `PROGRESS_EVERY` desde el último envío.
+    pub fn progress(&mut self) {
+        if self.last_sent.is_some_and(|t| t.elapsed() < PROGRESS_EVERY) {
+            return;
+        }
+        self.send("running", None);
+    }
+
+    pub fn started(&mut self) {
+        self.send("running", None);
+    }
+
+    /// `status`: `completed` | `failed` | `stopped`.
+    pub fn finished(&mut self, status: &str, summary: Option<String>) {
+        self.send(status, summary);
+    }
+
+    fn send(&mut self, status: &str, summary: Option<String>) {
+        self.last_sent = Some(Instant::now());
+        let mut task = json!({
+            "id": self.id,
+            "title": self.title,
+            "status": status,
+            "startedAt": self.started_at,
+            "usage": { "toolUses": self.tool_uses },
+            "steps": self.steps,
+        });
+        if let Some(model) = &self.model {
+            task["model"] = json!(model);
+        }
+        if status != "running" {
+            task["endedAt"] = json!(now_millis());
+            if let Some(s) = summary {
+                task["summary"] = json!(s.chars().take(4000).collect::<String>());
+            }
+        }
+        post(&self.parent_session, json!([{ "type": "task", "task": task }]));
+    }
+}
+
+/// Fuego y olvido: un aviso que no llega no puede frenar al agente.
+fn post(parent_session: &str, events: Value) {
+    let (Ok(url), Ok(token)) = (
+        std::env::var("GS_SUBAGENT_EVENTS_URL"),
+        std::env::var("FLEET_TOKEN"),
+    ) else {
+        return;
+    };
+    let body = json!({ "sessionId": parent_session, "events": events });
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        let res = client
+            .post(&url)
+            .bearer_auth(token)
+            .timeout(Duration::from_secs(10))
+            .json(&body)
+            .send()
+            .await;
+        match res {
+            Ok(r) if !r.status().is_success() => {
+                warn!("subagent events: gs contestó {}", r.status())
+            }
+            Err(e) => warn!("subagent events: no llegó a gs: {e}"),
+            _ => {}
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cancel_only_from_its_own_conversation() {
+        let token = CancellationToken::new();
+        register("t1", "parent-a", token.clone());
+        assert!(!cancel("parent-b", "t1"));
+        assert!(!token.is_cancelled());
+        assert!(cancel("parent-a", "t1"));
+        assert!(token.is_cancelled());
+        unregister("t1");
+        assert!(!cancel("parent-a", "t1"));
+    }
+
+    #[test]
+    fn steps_are_capped() {
+        let mut r = TaskReport::new("p", "t", "título", None);
+        for i in 0..80 {
+            r.push_step("text", &format!("paso {i}"));
+        }
+        assert_eq!(r.steps.len(), MAX_STEPS);
+    }
+}

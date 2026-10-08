@@ -101,6 +101,18 @@ impl GooseAcpAgent {
         self.on_steer_session(req).await
     }
 
+    #[custom_method(CancelSubagentRequest)]
+    async fn dispatch_cancel_subagent(
+        &self,
+        req: CancelSubagentRequest,
+    ) -> Result<CancelSubagentResponse, agent_client_protocol::Error> {
+        let cancelled = crate::agents::platform_extensions::subagent_events::cancel(
+            &req.session_id,
+            &req.task_id,
+        );
+        Ok(CancelSubagentResponse { cancelled })
+    }
+
     #[custom_method(DiagnosticsGetRequest)]
     async fn dispatch_get_diagnostics(
         &self,

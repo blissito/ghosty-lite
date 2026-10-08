@@ -183,6 +183,25 @@ pub struct SteerSessionResponse {
     pub message_id: String,
 }
 
+/// Detiene UN subagente de una sesión (ghosty.studio): la app lo pide desde su lista viva.
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
+#[request(
+    method = "_goose/unstable/subagent/cancel",
+    response = CancelSubagentResponse
+)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelSubagentRequest {
+    pub session_id: String,
+    pub task_id: String,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcResponse)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelSubagentResponse {
+    /// `false` si el hijo ya no existe o no es de esa sesión.
+    pub cancelled: bool,
+}
+
 /// Get a diagnostic report for a session.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, JsonRpcRequest)]
 #[request(

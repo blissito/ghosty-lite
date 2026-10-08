@@ -7,6 +7,7 @@ pub mod ext_manager;
 pub mod orchestrator;
 pub mod scheduler;
 pub mod summarize;
+pub mod subagent_events;
 pub mod summon;
 pub mod todo;
 pub mod tom;

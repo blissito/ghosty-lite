@@ -1,4 +1,5 @@
 use crate::agents::extension::PlatformExtensionContext;
+use crate::agents::platform_extensions::subagent_events::{self, TaskReport};
 use crate::agents::mcp_client::{Error, McpClientTrait};
 use crate::agents::subagent_handler::{run_subagent_task, OnMessageCallback, SubagentRunParams};
 use crate::agents::subagent_task_config::{TaskConfig, DEFAULT_SUBAGENT_MAX_TURNS};
@@ -1416,14 +1417,28 @@ impl SummonClient {
 
         let subagent_session_id = subagent_session.id.clone();
 
+        // gs pinta este hijo en la lista viva y se le puede detener solo a él.
+        let title = safe_truncate(&Self::get_task_description(&params), TASK_LABEL_BUDGET);
+        let report = Arc::new(std::sync::Mutex::new(TaskReport::new(
+            session_id,
+            &subagent_session_id,
+            &title,
+            Self::reported_model(&params),
+        )));
+        let child_token = cancellation_token.child_token();
+        subagent_events::register(&subagent_session_id, session_id, child_token.clone());
+        if let Ok(mut r) = report.lock() {
+            r.started();
+        }
+
         let params = SubagentRunParams {
             config: agent_config,
             recipe,
             task_config,
             return_last_only: true,
             session_id: subagent_session.id,
-            cancellation_token: Some(cancellation_token),
-            on_message: None,
+            cancellation_token: Some(child_token.clone()),
+            on_message: Some(Self::reporting_callback(Arc::clone(&report), None)),
             notification_tx: None,
         };
         let result = Self::run_subagent_with_notifications(
@@ -1435,6 +1450,15 @@ impl SummonClient {
             },
         )
         .await;
+
+        subagent_events::unregister(&subagent_session_id);
+        if let Ok(mut r) = report.lock() {
+            match &result {
+                Ok(text) => r.finished("completed", Some(text.clone())),
+                Err(_) if child_token.is_cancelled() => r.finished("stopped", None),
+                Err(e) => r.finished("failed", Some(e.to_string())),
+            }
+        }
 
         let mut meta = MetaObject::new();
         meta.0.insert(
@@ -2029,6 +2053,30 @@ impl SummonClient {
         completed.retain(|_id, task| task.completed_at.elapsed() <= ttl);
     }
 
+    /// El modelo que se le dice a gs: el pedido en la llamada o el de los subagentes.
+    fn reported_model(params: &DelegateParams) -> Option<String> {
+        params
+            .model
+            .clone()
+            .or_else(|| std::env::var("GHOSTY_SUBAGENT_MODEL").ok())
+    }
+
+    /// Lo que pasa en el hijo va a su reporte (pasos, herramientas) y, cada tanto, a gs.
+    fn reporting_callback(
+        report: Arc<std::sync::Mutex<TaskReport>>,
+        last_activity: Option<Arc<AtomicU64>>,
+    ) -> OnMessageCallback {
+        Arc::new(move |msg| {
+            if let Some(a) = &last_activity {
+                a.store(current_epoch_millis(), Ordering::Relaxed);
+            }
+            if let Ok(mut r) = report.lock() {
+                r.observe(msg);
+                r.progress();
+            }
+        })
+    }
+
     fn get_task_description(params: &DelegateParams) -> String {
         match (&params.source, &params.instructions) {
             (Some(source), Some(instructions)) => format!("{}: {}", source, instructions),
@@ -2096,12 +2144,23 @@ impl SummonClient {
 
         let last_activity_clone = Arc::clone(&last_activity);
 
-        let on_message: OnMessageCallback = Arc::new(move |_msg| {
-            last_activity_clone.store(current_epoch_millis(), Ordering::Relaxed);
-        });
+        let report = Arc::new(std::sync::Mutex::new(TaskReport::new(
+            session_id,
+            &task_id,
+            &description,
+            Self::reported_model(&params),
+        )));
+        let on_message = Self::reporting_callback(Arc::clone(&report), Some(last_activity_clone));
 
         let task_token = CancellationToken::new();
         let task_token_clone = task_token.clone();
+        subagent_events::register(&task_id, session_id, task_token.clone());
+        if let Ok(mut r) = report.lock() {
+            r.started();
+        }
+        let finish_report = Arc::clone(&report);
+        let finish_token = task_token.clone();
+        let finish_id = task_id.clone();
 
         let notification_sink = Self::notification_sink(None);
         let task_notification_sink = Arc::clone(&notification_sink);
@@ -2117,12 +2176,22 @@ impl SummonClient {
                 on_message: Some(on_message),
                 notification_tx: None,
             };
-            Self::run_subagent_with_notifications(task_notification_sink, move |notification_tx| {
-                let mut params = params;
-                params.notification_tx = Some(notification_tx);
-                run_subagent_task(params)
-            })
-            .await
+            let result =
+                Self::run_subagent_with_notifications(task_notification_sink, move |notification_tx| {
+                    let mut params = params;
+                    params.notification_tx = Some(notification_tx);
+                    run_subagent_task(params)
+                })
+                .await;
+            subagent_events::unregister(&finish_id);
+            if let Ok(mut r) = finish_report.lock() {
+                match &result {
+                    Ok(text) => r.finished("completed", Some(text.clone())),
+                    Err(_) if finish_token.is_cancelled() => r.finished("stopped", None),
+                    Err(e) => r.finished("failed", Some(e.to_string())),
+                }
+            }
+            result
         });
 
         let task = BackgroundTask {
