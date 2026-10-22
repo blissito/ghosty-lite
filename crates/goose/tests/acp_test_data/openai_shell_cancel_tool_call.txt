@@ -1,0 +1,8 @@
+data: {"id":"chatcmpl-cancel","object":"chat.completion.chunk","created":1773623503,"model":"gpt-5-nano-2025-08-07","choices":[{"index":0,"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_cancel_shell","type":"function","function":{"name":"shell","arguments":"{\"command\": \"sleep 9137 & sleep 30; echo fin-cancel\"}"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-cancel","object":"chat.completion.chunk","created":1773623503,"model":"gpt-5-nano-2025-08-07","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":null}
+
+data: {"id":"chatcmpl-cancel","object":"chat.completion.chunk","created":1773623503,"model":"gpt-5-nano-2025-08-07","choices":[],"usage":{"prompt_tokens":100,"completion_tokens":10,"total_tokens":110}}
+
+data: [DONE]
+

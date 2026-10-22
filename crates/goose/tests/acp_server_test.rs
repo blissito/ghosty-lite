@@ -3,7 +3,7 @@
 #[path = "acp_common_tests/mod.rs"]
 mod common_tests;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, NewSessionRequest,
+    CancelNotification, ContentBlock, ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, NewSessionRequest,
     PromptRequest, SessionConfigKind, SessionConfigOptionCategory, SessionConfigOptionValue,
     SessionInfo, SetSessionConfigOptionRequest, StopReason, TextContent,
 };
@@ -1369,5 +1369,85 @@ fn test_ghosty_sandbox_is_per_session_replaced_on_load_and_removed_on_close() {
         conn.close_session(&session_b).await.unwrap();
         conn.close_session(&plain).await.unwrap();
         assert!(session_sandbox(&session_b).is_none());
+    });
+}
+
+/// ¿Hay algún proceso vivo cuya línea de comandos contenga `pattern`?
+fn process_alive(pattern: &str) -> bool {
+    std::process::Command::new("pgrep")
+        .args(["-f", pattern])
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false)
+}
+
+/// «Detener» desde el cliente ACP (`session/cancel`) con un shell en vuelo: el prompt
+/// tiene que cerrar como `Cancelled` en segundos y el árbol del shell (incluido lo que
+/// mandó a segundo plano) tiene que morir, en vez de correr hasta su fin.
+#[test]
+fn test_cancel_kills_running_shell() {
+    run_test(async {
+        let prompt = "Run the long command and report when it ends.";
+        let openai = OpenAiFixture::new(
+            vec![(
+                prompt.to_string(),
+                include_str!("acp_test_data/openai_shell_cancel_tool_call.txt"),
+            )],
+            AcpServerConnection::expected_session_id(),
+        )
+        .await;
+        let mut conn = AcpServerConnection::new(
+            TestConnectionConfig {
+                builtins: vec!["developer".to_string()],
+                ..Default::default()
+            },
+            openai,
+        )
+        .await;
+        let common_tests::fixtures::SessionData { session, .. } = conn.new_session().await.unwrap();
+        let session_id = session.session_id().clone();
+        let cx = conn.cx().clone();
+
+        let prompt_task = tokio::spawn({
+            let cx = cx.clone();
+            let session_id = session_id.clone();
+            async move {
+                cx.send_request(PromptRequest::new(
+                    session_id,
+                    vec![ContentBlock::Text(TextContent::new(prompt))],
+                ))
+                .block_task()
+                .await
+            }
+        });
+
+        // Espera a que el shell esté de verdad corriendo antes de detener.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+        while !process_alive("sleep 9137") {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the shell never started"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+
+        cx.send_notification(CancelNotification::new(session_id))
+            .unwrap();
+
+        let response = tokio::time::timeout(std::time::Duration::from_secs(10), prompt_task)
+            .await
+            .expect("prompt should end shortly after session/cancel, not wait for the command")
+            .unwrap()
+            .unwrap();
+        assert_eq!(response.stop_reason, StopReason::Cancelled);
+
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        while process_alive("sleep 9137") {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the background child of the cancelled shell is still alive"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
     });
 }
