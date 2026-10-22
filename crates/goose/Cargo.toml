@@ -137,7 +137,7 @@ blake3 = { version = "1", default-features = false, features = ["std"] }
 fs2 = { workspace = true }
 tokio-stream = { workspace = true, features = ["io-util"] }
 tempfile = { workspace = true }
-tokio-util = { workspace = true, features = ["compat"] }
+tokio-util = { workspace = true, features = ["compat", "rt"] }
 agent-client-protocol-schema = { workspace = true }
 agent-client-protocol = { workspace = true, features = [
     "unstable_elicitation",
@@ -186,9 +186,9 @@ subtle = { version = "2.5", default-features = false, features = ["std"] }
 gethostname = "1.1.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi = { workspace = true, features = ["accctrl", "aclapi", "fileapi", "handleapi", "minwinbase", "sddl", "securitybaseapi", "winbase", "winerror"] }
+winapi = { workspace = true, features = ["accctrl", "aclapi", "fileapi", "handleapi", "jobapi2", "minwinbase", "processthreadsapi", "sddl", "securitybaseapi", "synchapi", "winbase", "winerror"] }
 keyring = { workspace = true, features = ["windows-native"], optional = true }
-ntapi = { version = "0.4.3", default-features = false }
+ntapi = { version = "0.4.3", default-features = false, features = ["user"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { workspace = true, features = ["apple-native"], optional = true }

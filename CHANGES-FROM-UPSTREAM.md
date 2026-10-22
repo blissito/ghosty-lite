@@ -15,6 +15,8 @@ redirecciones del cliente MCP HTTP: rompería MCPs que redirigen legítimamente)
 **Cherry-pick 2026-10-22:** #12062 (`df1e2850c`, prefijo del subagente cacheable: el id va al primer
 mensaje y las tools se ordenan; aplica igual a los hijos async de `summon`).
 
+**#12958 (2026-10-22, main de upstream `5be3f8d3d`):** el shell del developer corre en su propio grupo de procesos y, al cancelar, vencer el timeout o soltar la tool, se mata el grupo entero (sin huérfanos en cajas de 2 GB). Encaja con el aislamiento por conversación: `setpgid` va antes de nuestros `pre_exec` (namespace de montaje, /tmp privado, uid), que no llaman `setsid`; se conservó nuestro timeout y el mensaje de error del aislamiento.
+
 ## Qué se quitó
 
 | Componente | Por qué |

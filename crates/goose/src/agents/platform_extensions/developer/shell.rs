@@ -19,6 +19,7 @@ use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 use tokio_stream::{wrappers::SplitStream, StreamExt};
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::AbortOnDropHandle;
 
 use crate::agents::tool_execution::ToolCallNotificationEmitter;
 use crate::session::session_sandbox::{session_sandbox, SessionSandbox};
@@ -29,6 +30,7 @@ pub use super::shell_output_streaming::{
     ShellOutputStream, DEVELOPER_SHELL_OUTPUT_NOTIFICATION_METHOD,
 };
 use super::shell_output_streaming::{ShellOutputBatcher, SHELL_LIVE_OUTPUT_FLUSH_INTERVAL};
+use super::shell_process::ShellProcess;
 
 /// Check if the current process is running inside a Flatpak sandbox.
 ///
@@ -606,7 +608,11 @@ async fn run_command(
     command.stderr(Stdio::piped());
     command.stdin(Stdio::null());
 
-    let mut child = command.spawn().map_err(|error| {
+    // ShellProcess pone al shell en su propio grupo de procesos (`setpgid`, que la
+    // std aplica ANTES de nuestros `pre_exec`): el namespace de montaje, el /tmp
+    // privado y el cambio de uid de la conversación aislada siguen igual, y al
+    // cancelar o vencer se mata el grupo entero, no sólo el shell.
+    let mut process = ShellProcess::spawn(&mut command).map_err(|error| {
         // En una conversación aislada el fallo suele ser el aislamiento mismo
         // (namespace, /tmp privado, cambio de uid): no se corre sin él.
         if session_id.and_then(session_sandbox).is_some() {
@@ -616,52 +622,54 @@ async fn run_command(
         }
     })?;
 
-    let child_stdout = child
+    let child_stdout = process
+        .child
         .stdout
         .take()
         .ok_or_else(|| "Failed to capture stdout".to_string())?;
-    let child_stderr = child
+    let child_stderr = process
+        .child
         .stderr
         .take()
         .ok_or_else(|| "Failed to capture stderr".to_string())?;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let output_task = tokio::spawn(collect_tagged_lines(
+    let output_task = AbortOnDropHandle::new(tokio::spawn(collect_tagged_lines(
         child_stdout,
         child_stderr,
         tx,
         notification_emitter,
-    ));
+    )));
     let abort_handle = output_task.abort_handle();
 
     let mut timed_out = false;
     let exit_code = if let Some(timeout_secs) = timeout_secs.filter(|value| *value > 0) {
         tokio::select! {
-            result = tokio::time::timeout(Duration::from_secs(timeout_secs), child.wait()) => match result {
+            result = tokio::time::timeout(Duration::from_secs(timeout_secs), process.wait()) => match result {
                 Ok(wait_result) => wait_result
                     .map_err(|error| format!("Failed waiting on shell command: {}", error))?
                     .code(),
                 Err(_) => {
                     timed_out = true;
-                    let _ = child.start_kill();
-                    let _ = child.wait().await;
+                    process.kill().await
+                        .map_err(|error| format!("Failed to stop shell command: {}", error))?;
                     None
                 }
             },
             _ = cancellation_token.cancelled() => {
-                let _ = child.start_kill();
-                let _ = child.wait().await;
+                process.kill().await
+                    .map_err(|error| format!("Failed to stop shell command: {}", error))?;
                 None
             }
         }
     } else {
         tokio::select! {
-            result = child.wait() => result
+            result = process.wait() => result
                 .map_err(|error| format!("Failed waiting on shell command: {}", error))?
                 .code(),
             _ = cancellation_token.cancelled() => {
-                let _ = child.start_kill();
-                let _ = child.wait().await;
+                process.kill().await
+                    .map_err(|error| format!("Failed to stop shell command: {}", error))?;
                 None
             }
         }
