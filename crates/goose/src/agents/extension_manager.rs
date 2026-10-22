@@ -274,6 +274,38 @@ pub fn get_parameter_names(tool: &Tool) -> Vec<String> {
 }
 
 const TOOL_EXTENSION_META_KEY: &str = "goose_extension";
+/// Nombre con el que el servidor MCP conoce la tool cuando su nombre público
+/// se tuvo que sanear (port de upstream #12875).
+const TOOL_SERVER_NAME_META_KEY: &str = "goose_server_tool_name";
+
+/// MCP permite nombres de tool que los providers rechazan (OpenAI y DeepSeek
+/// piden `^[a-zA-Z0-9_-]{1,64}$`). Un nombre reescrito lleva un hash del
+/// original, así `db.query` y `db_query`, o dos nombres que comparten sus
+/// primeros 55 caracteres, siguen siendo tools distintas. Port de upstream
+/// #12875 (allá vive en `lease.rs`, que el fork no tiene).
+pub(crate) fn provider_safe_tool_name(name: &str) -> String {
+    let is_safe = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-';
+    if !name.is_empty() && name.len() <= 64 && name.chars().all(is_safe) {
+        return name.to_string();
+    }
+    let sanitized: String = name
+        .chars()
+        .map(|c| if is_safe(c) { c } else { '_' })
+        .take(55)
+        .collect();
+    let hash = blake3::hash(name.as_bytes()).to_hex();
+    format!("{sanitized}_{:.8}", hash.as_str())
+}
+
+/// El nombre que hay que mandarle al servidor MCP: el original guardado al
+/// sanear, o `None` si el nombre público no se tocó.
+fn get_tool_server_name(tool: &Tool) -> Option<String> {
+    tool.meta
+        .as_ref()
+        .and_then(|m| m.0.get(TOOL_SERVER_NAME_META_KEY))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
 
 pub fn get_tool_owner(tool: &Tool) -> Option<String> {
     tool.meta
@@ -316,7 +348,17 @@ pub(crate) fn recover_mangled_tool_name<'a>(
         let owner_mangled = owner.map(|o| format!("{o}.{name}"));
         let owner_prefixed = owner.map(|o| format!("{o}__{name}"));
 
+        // El modelo escribe el nombre original sin sanear ("ext__db.query",
+        // "ext.db.query" o sólo "db.query"): se sanea igual y se compara.
+        let sanitized_match = name != stripped
+            && (provider_safe_tool_name(stripped) == name
+                || (!stripped.contains("__")
+                    && provider_safe_tool_name(&stripped.replacen('.', "__", 1)) == name)
+                || owner
+                    .is_some_and(|o| provider_safe_tool_name(&format!("{o}__{stripped}")) == name));
+
         let matches = stripped == name
+            || sanitized_match
             || separator_mangled.as_deref() == Some(stripped)
             || owner_mangled.as_deref() == Some(stripped)
             || owner_prefixed.as_deref() == Some(stripped);
@@ -2092,11 +2134,12 @@ impl ExtensionManager {
                 loop {
                     for mut tool in client_tools.tools {
                         if config.is_tool_available(&tool.name) {
-                            let public_name = if expose_unprefixed {
+                            let raw_public_name = if expose_unprefixed {
                                 tool.name.to_string()
                             } else {
                                 format!("{}__{}", name, tool.name)
                             };
+                            let public_name = provider_safe_tool_name(&raw_public_name);
 
                             let mut meta_map = tool
                                 .meta
@@ -2107,6 +2150,16 @@ impl ExtensionManager {
                                 TOOL_EXTENSION_META_KEY.to_string(),
                                 serde_json::Value::String(name.clone()),
                             );
+                            if public_name != raw_public_name {
+                                meta_map.insert(
+                                    TOOL_SERVER_NAME_META_KEY.to_string(),
+                                    serde_json::Value::String(tool.name.to_string()),
+                                );
+                            } else {
+                                // Un servidor no puede fijar el nombre real
+                                // por nosotros.
+                                meta_map.remove(TOOL_SERVER_NAME_META_KEY);
+                            }
 
                             tool.name = public_name.into();
                             tool.meta = Some(rmcp::model::MetaObject(meta_map));
@@ -2429,10 +2482,11 @@ impl ExtensionManager {
                     ));
                 }
 
-                let actual_tool_name = name
-                    .strip_prefix(&format!("{owner}__"))
-                    .unwrap_or(&name)
-                    .to_string();
+                let actual_tool_name = get_tool_server_name(tool).unwrap_or_else(|| {
+                    name.strip_prefix(&format!("{owner}__"))
+                        .unwrap_or(&name)
+                        .to_string()
+                });
 
                 let client = self.get_server_client(&owner).await.ok_or_else(|| {
                     ErrorData::new(
@@ -3995,8 +4049,100 @@ mod tests {
         assert_eq!(resolved.actual_tool_name, "tool");
     }
 
+    #[test]
+    fn test_provider_safe_tool_name() {
+        let is_provider_safe = |n: &str| {
+            !n.is_empty()
+                && n.len() <= 64
+                && n.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        };
+
+        // Lo que ya es seguro no se toca (nuestras tools y las de casa).
+        for safe in [
+            "developer__shell",
+            "ghosty__entregar_archivo",
+            "gs__crm-search",
+            "summon__delegate",
+        ] {
+            assert_eq!(provider_safe_tool_name(safe), safe);
+        }
+
+        // Punto y caracteres raros: se reemplazan y llevan hash.
+        let dotted = provider_safe_tool_name("crm__db.query");
+        assert!(dotted.starts_with("crm__db_query_"), "{dotted}");
+        assert!(is_provider_safe(&dotted));
+        let weird = provider_safe_tool_name("crm__búsqueda clientes/v2:ñ");
+        assert!(is_provider_safe(&weird), "{weird}");
+
+        // Determinista: el mismo original da el mismo nombre seguro.
+        assert_eq!(dotted, provider_safe_tool_name("crm__db.query"));
+
+        // Colisiones: `db.query` y `db_query` siguen siendo distintas.
+        assert_ne!(dotted, provider_safe_tool_name("crm__db_query"));
+        assert_ne!(
+            provider_safe_tool_name("crm__a.b"),
+            provider_safe_tool_name("crm__a/b")
+        );
+
+        // Más de 64: 55 caracteres + "_" + 8 de hash = 64, y dos nombres que
+        // comparten los primeros 55 no chocan.
+        let long_a = format!("ext__{}_alpha", "x".repeat(70));
+        let long_b = format!("ext__{}_bravo", "x".repeat(70));
+        let safe_a = provider_safe_tool_name(&long_a);
+        let safe_b = provider_safe_tool_name(&long_b);
+        assert_eq!(safe_a.len(), 64);
+        assert!(is_provider_safe(&safe_a));
+        assert_ne!(safe_a, safe_b);
+        assert_eq!(provider_safe_tool_name(&"y".repeat(64)), "y".repeat(64));
+        assert_eq!(provider_safe_tool_name(&"y".repeat(65)).len(), 64);
+
+        // Vacío no es válido para el provider.
+        assert!(is_provider_safe(&provider_safe_tool_name("")));
+    }
+
     #[tokio::test]
-    async fn test_resolve_tool_exact_dotted_name_never_rewritten() {
+    async fn test_sanitized_tool_round_trip_reaches_original_name() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let extension_manager =
+            ExtensionManager::new_without_provider(temp_dir.path().to_path_buf());
+        extension_manager
+            .add_mock_extension("dotted".to_string(), Arc::new(MockDottedClient {}))
+            .await;
+
+        // Lo que ve el modelo: sólo nombres seguros.
+        let tools = extension_manager
+            .get_prefixed_tools("test-session-id", None)
+            .await
+            .unwrap();
+        let names: Vec<String> = tools.iter().map(|t| t.name.to_string()).collect();
+        let public = provider_safe_tool_name("dotted__db.query");
+        assert!(names.contains(&public), "{names:?}");
+        assert!(!names.iter().any(|n| n.contains('.')), "{names:?}");
+
+        // Ida y vuelta: el nombre seguro llega al servidor como el original.
+        let resolved = extension_manager
+            .resolve_tool("test-session-id", &public)
+            .await
+            .expect("sanitized name must resolve");
+        assert_eq!(resolved.extension_name, "dotted");
+        assert_eq!(resolved.actual_tool_name, "db.query");
+
+        let ctx = ToolCallContext::new("test-session-id".to_string(), None, None);
+        let result = extension_manager
+            .dispatch_tool_call(
+                &ctx,
+                CallToolRequestParams::new(public.clone()),
+                CancellationToken::default(),
+            )
+            .await
+            .expect("sanitized name must dispatch");
+        // El mock sólo contesta a "db.query" o "db__query".
+        assert!(result.result.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_tool_original_dotted_name_recovers_sanitized_tool() {
         let temp_dir = tempfile::tempdir().unwrap();
         let extension_manager =
             ExtensionManager::new_without_provider(temp_dir.path().to_path_buf());
